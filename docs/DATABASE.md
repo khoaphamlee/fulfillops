@@ -92,3 +92,33 @@ Expected dimensions include tenant, warehouse, SKU, status, external reference, 
 - no `ddl-auto=update` as migration strategy,
 - every schema change gets a Flyway migration,
 - destructive migrations require explicit review.
+
+## 8. Application schema namespace
+
+FulfillOps application objects belong in the `fulfillops` PostgreSQL schema. Flyway's schema-history table may remain in the default PostgreSQL schema while application objects are created as schema-qualified names, for example `fulfillops.tenants`.
+
+Do not change this convention without a deliberate schema configuration decision.
+
+## 9. Flyway migration workflow
+
+Migration files live in `backend/src/main/resources/db/migration` and use this naming convention:
+
+```text
+V<positive_integer>__<lowercase_underscore_description>.sql
+```
+
+For example:
+
+```text
+V1__create_fulfillops_schema.sql
+V2__create_tenant_table.sql
+```
+
+For local development:
+
+1. Start PostgreSQL with `docker compose up -d postgres`.
+2. Run the application or integration tests.
+3. Flyway validates applied migrations and applies pending migrations before application use.
+4. Add a new versioned migration for every schema change.
+
+Applied migrations are immutable: never edit, rename, or delete a migration that may already have been applied. Never manually edit a shared schema outside Flyway. Flyway clean remains disabled in application configuration, Hibernate automatic schema mutation is prohibited, and destructive migrations require explicit review.

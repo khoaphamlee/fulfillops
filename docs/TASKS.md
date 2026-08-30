@@ -30,7 +30,7 @@ Status: DONE
 Status: DONE
     
 ### FO-004 — Local PostgreSQL + Flyway
-Status: TODO
+Status: DONE
 
 ### FO-005 — Tenant aggregate
 Status: TODO
