@@ -5,7 +5,7 @@ Task IDs are stable references for prompts, commits and documentation.
 ## Phase 0
 
 ### FO-001 — Repository and project-brain setup
-Status: IN_PROGRESS
+Status: DONE
 
 Scope:
 - create repository,
