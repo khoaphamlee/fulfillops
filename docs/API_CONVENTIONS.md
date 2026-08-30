@@ -66,6 +66,8 @@ Fields:
 Initial error codes:
 - `VALIDATION_ERROR` â€” a request body failed Bean Validation.
 - `MALFORMED_JSON` â€” a request body could not be parsed.
+- `TENANT_NOT_FOUND` â€” a requested Tenant does not exist.
+- `TENANT_CODE_CONFLICT` â€” a Tenant code is already in use.
 
 Every response includes a server-generated `X-Request-Id` header. For error responses, it exactly matches the `requestId` in the JSON body. Client-provided request IDs are not accepted in this phase.
 

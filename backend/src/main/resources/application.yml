@@ -9,3 +9,7 @@ spring:
     clean-disabled: true
     validate-migration-naming: true
     locations: classpath:db/migration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false

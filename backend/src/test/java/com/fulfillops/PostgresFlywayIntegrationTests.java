@@ -47,7 +47,7 @@ class PostgresFlywayIntegrationTests {
     private Flyway flyway;
 
     @Test
-    void postgresIsReachableAndFlywayAppliesTheInitialSchemaMigration() throws Exception {
+    void postgresIsReachableAndFlywayAppliesBothSchemaMigrations() throws Exception {
         assertTrue(POSTGRES.isRunning());
         assertEquals(1, queryForInt("SELECT 1"));
         assertEquals(1, queryForInt("""
@@ -60,9 +60,19 @@ class PostgresFlywayIntegrationTests {
                 FROM public.flyway_schema_history
                 WHERE version = '1' AND success = true
                 """));
+        assertEquals(1, queryForInt("""
+                SELECT COUNT(*)
+                FROM public.flyway_schema_history
+                WHERE version = '2' AND success = true
+                """));
+        assertEquals(1, queryForInt("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'fulfillops' AND table_name = 'tenants'
+                """));
 
         MigrationInfo currentMigration = flyway.info().current();
-        assertEquals("1", currentMigration.getVersion().getVersion());
+        assertEquals("2", currentMigration.getVersion().getVersion());
         assertEquals(MigrationState.SUCCESS, currentMigration.getState());
     }
 

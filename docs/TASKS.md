@@ -33,7 +33,7 @@ Status: DONE
 Status: DONE
 
 ### FO-005 — Tenant aggregate
-Status: TODO
+Status: DONE
 
 ### FO-006 — User and tenant membership
 Status: TODO

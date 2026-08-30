@@ -10,6 +10,8 @@ Schema migrations will use Flyway once the backend is bootstrapped.
 
 Tenant-owned tables should carry a tenant identifier unless an ADR establishes another strategy.
 
+The `fulfillops.tenants` table is the tenancy root, so it is the deliberate exception: it does not contain `tenant_id`. Tenant codes are globally unique and immutable. Future tenant-owned operational tables must carry tenant ownership.
+
 Likely future constraints:
 
 ```text
