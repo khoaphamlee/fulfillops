@@ -24,7 +24,7 @@ Done when:
 ## Phase 1 backlog
 
 ### FO-002 — Bootstrap Spring Boot backend
-Status: TODO
+Status: DONE
 
 ### FO-003 — API error contract and validation foundation
 Status: TODO
