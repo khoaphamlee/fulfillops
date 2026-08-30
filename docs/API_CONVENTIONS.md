@@ -35,24 +35,45 @@ Likely convention:
 
 ## 5. Error contract
 
-Target shape:
+All REST API errors use this shape:
 
 ```json
 {
-  "code": "INVENTORY_INSUFFICIENT",
-  "message": "Insufficient available inventory.",
-  "status": 409,
-  "path": "/api/v1/fulfillment-requests",
+  "code": "VALIDATION_ERROR",
+  "message": "Request validation failed.",
+  "status": 400,
+  "path": "/api/v1/warehouses",
   "timestamp": "2026-01-01T12:00:00Z",
-  "requestId": "..."
+  "requestId": "550e8400-e29b-41d4-a716-446655440000",
+  "fieldErrors": [
+    {
+      "field": "name",
+      "message": "must not be blank"
+    }
+  ]
 }
 ```
 
-Exact fields will be finalized in FO-003.
+Fields:
+- `code` â€” stable machine-readable error code.
+- `message` â€” safe client-facing summary.
+- `status` â€” numeric HTTP status.
+- `path` â€” request URI path.
+- `timestamp` â€” UTC ISO-8601 instant.
+- `requestId` â€” server-generated UUID for the request.
+- `fieldErrors` â€” field-level validation details, or an empty array when not applicable. Entries contain only `field` and `message`; rejected values are never exposed.
+
+Initial error codes:
+- `VALIDATION_ERROR` â€” a request body failed Bean Validation.
+- `MALFORMED_JSON` â€” a request body could not be parsed.
+
+Every response includes a server-generated `X-Request-Id` header. For error responses, it exactly matches the `requestId` in the JSON body. Client-provided request IDs are not accepted in this phase.
 
 ## 6. Validation
 
 Invalid client input returns predictable 4xx responses. Business conflicts should not become generic 500 errors.
+
+FO-003 handles request-body validation. Support for method-level query/path parameter validation failures (`HandlerMethodValidationException`) will be added when an API requires it.
 
 ## 7. Idempotency
 

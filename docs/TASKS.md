@@ -27,8 +27,8 @@ Done when:
 Status: DONE
 
 ### FO-003 — API error contract and validation foundation
-Status: TODO
-
+Status: DONE
+    
 ### FO-004 — Local PostgreSQL + Flyway
 Status: TODO
 
