@@ -22,6 +22,8 @@ Warehouse physical locations use a fixed normalized hierarchy: Warehouse -> Zone
 
 `fulfillops.skus` holds tenant-owned item identities independently of Warehouses and Bins. SKU codes are unique within a Tenant and canonicalized to uppercase using `Locale.ROOT`, so `abc-001` and `ABC-001` identify the same SKU there. The database uniquely constrains `(tenant_id, code)` and rejects noncanonical or malformed persisted codes. SKU remains master data only: Inventory will later connect it to warehouse/bin stock and ledger state.
 
+`fulfillops.inbound_shipments` records atomically-created expected goods for one Tenant and Warehouse. Its aggregate-owned lines identify one SKU per shipment and a strictly positive whole-unit expected quantity. Inbound planning does not record physical receipt or create Inventory. Where an important reference must prove that two tenant-owned records share the same Tenant, tenant-aware composite foreign keys use `(tenant_id, id)` targets; the intentional repeated `tenant_id` and composite indexes trade small write/storage cost for stronger direct-write integrity. This does not apply automatically to normalized descendants such as the physical-location hierarchy. See ADR-003.
+
 Likely future constraints:
 
 ```text

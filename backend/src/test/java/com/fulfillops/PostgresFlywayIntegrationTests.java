@@ -97,6 +97,11 @@ class PostgresFlywayIntegrationTests {
                 """));
         assertEquals(1, queryForInt("""
                 SELECT COUNT(*)
+                FROM public.flyway_schema_history
+                WHERE version = '9' AND success = true
+                """));
+        assertEquals(1, queryForInt("""
+                SELECT COUNT(*)
                 FROM information_schema.tables
                 WHERE table_schema = 'fulfillops' AND table_name = 'tenants'
                 """));
@@ -125,6 +130,12 @@ class PostgresFlywayIntegrationTests {
                 SELECT COUNT(*)
                 FROM information_schema.tables
                 WHERE table_schema = 'fulfillops' AND table_name = 'skus'
+                """));
+        assertEquals(2, queryForInt("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'fulfillops'
+                  AND table_name IN ('inbound_shipments', 'inbound_shipment_lines')
                 """));
         assertEquals(1, queryForInt("""
                 SELECT COUNT(*)
@@ -171,9 +182,18 @@ class PostgresFlywayIntegrationTests {
         assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'fk_skus_tenant'"));
         assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'uk_skus_tenant_code'"));
         assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'chk_skus_code_canonical_format'"));
+        assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'uk_warehouses_tenant_id'"));
+        assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'uk_skus_tenant_id'"));
+        assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'uk_inbound_shipments_tenant_id'"));
+        assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'fk_inbound_shipments_tenant'"));
+        assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'fk_inbound_shipments_tenant_warehouse'"));
+        assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'uk_inbound_shipment_lines_shipment_sku'"));
+        assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'fk_inbound_shipment_lines_tenant_shipment'"));
+        assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'fk_inbound_shipment_lines_tenant_sku'"));
+        assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'chk_inbound_shipment_lines_expected_quantity'"));
 
         MigrationInfo currentMigration = flyway.info().current();
-        assertEquals("8", currentMigration.getVersion().getVersion());
+        assertEquals("9", currentMigration.getVersion().getVersion());
         assertEquals(MigrationState.SUCCESS, currentMigration.getState());
     }
 

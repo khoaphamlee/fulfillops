@@ -51,6 +51,8 @@ Warehouse also owns its physical-location sub-feature. Zone, Aisle, Rack, and Bi
 
 The Sku module owns tenant-scoped item identities. It depends on Tenant only through the narrow Tenant application API, keeps scalar `tenantId` ownership, and has no Warehouse/Bin persistence relationship. Inventory will compose SKU identity with physical storage later.
 
+The Inbound module owns the InboundShipment aggregate and its private InboundShipmentLine children. It depends on Warehouse and Sku only through narrow application existence/scope operations, never through their repositories or entities. Inbound creates expected planning data atomically; receiving and inventory remain separate later workflows.
+
 ## 4. Layering guideline
 
 A practical structure may evolve toward:

@@ -51,7 +51,7 @@ Status: DONE
 Status: DONE
 
 ### FO-011 — Inbound shipment
-Status: TODO
+Status: DONE
 
 ### FO-012 — Receiving workflow
 Status: TODO

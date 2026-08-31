@@ -42,9 +42,19 @@ public class SkuService {
     @Transactional(readOnly = true)
     public SkuResponse getById(UUID tenantId, UUID skuId) {
         tenantService.requireExistingTenant(tenantId);
-        Sku sku = skuRepository.findByIdAndTenantId(skuId, tenantId)
-                .orElseThrow(SkuNotFoundException::new);
+        Sku sku = requireExistingSkuEntity(tenantId, skuId);
         return toResponse(sku);
+    }
+
+    @Transactional(readOnly = true)
+    public void requireExistingSku(UUID tenantId, UUID skuId) {
+        requireExistingSkuEntity(tenantId, skuId);
+    }
+
+    private Sku requireExistingSkuEntity(UUID tenantId, UUID skuId) {
+        tenantService.requireExistingTenant(tenantId);
+        return skuRepository.findByIdAndTenantId(skuId, tenantId)
+                .orElseThrow(SkuNotFoundException::new);
     }
 
     private boolean isSkuTenantCodeUniqueViolation(DataIntegrityViolationException exception) {
