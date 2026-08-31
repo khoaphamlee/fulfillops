@@ -54,7 +54,7 @@ Status: DONE
 Status: DONE
 
 ### FO-012 — Receiving workflow
-Status: TODO
+Status: DONE
 
 ### FO-013 — Inventory balance foundation
 Status: TODO

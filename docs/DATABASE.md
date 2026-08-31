@@ -24,6 +24,10 @@ Warehouse physical locations use a fixed normalized hierarchy: Warehouse -> Zone
 
 `fulfillops.inbound_shipments` records atomically-created expected goods for one Tenant and Warehouse. Its aggregate-owned lines identify one SKU per shipment and a strictly positive whole-unit expected quantity. Inbound planning does not record physical receipt or create Inventory. Where an important reference must prove that two tenant-owned records share the same Tenant, tenant-aware composite foreign keys use `(tenant_id, id)` targets; the intentional repeated `tenant_id` and composite indexes trade small write/storage cost for stronger direct-write integrity. This does not apply automatically to normalized descendants such as the physical-location hierarchy. See ADR-003.
 
+Receiving uses append-only `receiving_receipts` and `receiving_receipt_lines`; planned expected quantities remain unchanged. Receipt history is the source for cumulative received and remaining quantities, and partial receipts are allowed. Receipt posting takes a PostgreSQL pessimistic lock on the scoped InboundShipment root, sums prior receipt history, and rejects an over-receipt. The cumulative invariant is workflow-enforced by that lock and transaction, not by a standalone SQL CHECK; direct SQL can bypass it. Receiving currently supports whole units only, does not mutate Inventory, and does not choose a Bin/putaway destination. Receipts are immutable history; future corrections should use explicit compensating records.
+
+Receiving POST is not retry-safe in FO-012: a successful retry can create another receipt when quantity remains. Real receiving idempotency—key scope, same-payload replay, mismatch conflict, concurrent key handling, and database uniqueness—must be implemented before FO-013 Inventory starts.
+
 Likely future constraints:
 
 ```text

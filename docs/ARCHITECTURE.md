@@ -53,6 +53,8 @@ The Sku module owns tenant-scoped item identities. It depends on Tenant only thr
 
 The Inbound module owns the InboundShipment aggregate and its private InboundShipmentLine children. It depends on Warehouse and Sku only through narrow application existence/scope operations, never through their repositories or entities. Inbound creates expected planning data atomically; receiving and inventory remain separate later workflows.
 
+Receiving is an Inbound sub-feature. It owns append-only receipt records while using scoped Inbound persistence internally to lock one Shipment root and validate planned lines in the same local PostgreSQL transaction. Receiving exposes derived progress as a read model; it does not persist receiving status or counters. Inventory and Putaway remain separate modules/workflows.
+
 ## 4. Layering guideline
 
 A practical structure may evolve toward:

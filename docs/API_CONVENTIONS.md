@@ -83,6 +83,10 @@ Initial error codes:
 - `SKU_CODE_CONFLICT` — a canonical SKU code is already in use in the Tenant.
 - `INBOUND_SHIPMENT_NOT_FOUND` — a requested inbound shipment does not exist in the URL Tenant/Warehouse scope.
 - `INBOUND_SHIPMENT_DUPLICATE_SKU_LINE` — a SKU is repeated in one inbound shipment request.
+- `RECEIVING_RECEIPT_NOT_FOUND` — a requested receipt does not exist in the URL Shipment scope.
+- `RECEIVING_PLANNED_LINE_NOT_FOUND` — a requested planned inbound line does not belong to the scoped Shipment.
+- `RECEIVING_DUPLICATE_LINE` — a planned line is repeated in one receipt.
+- `RECEIVING_QUANTITY_EXCEEDS_EXPECTED` — receipt quantity would exceed the planned line's remaining expected quantity.
 
 Every response includes a server-generated `X-Request-Id` header. For error responses, it exactly matches the `requestId` in the JSON body. Client-provided request IDs are not accepted in this phase.
 
@@ -122,6 +126,9 @@ POST /api/v1/tenants/{tenantId}/skus
 GET  /api/v1/tenants/{tenantId}/skus/{skuId}
 POST /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/inbound-shipments
 GET  /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/inbound-shipments/{shipmentId}
+POST /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/inbound-shipments/{shipmentId}/receipts
+GET  /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/inbound-shipments/{shipmentId}/receipts/{receiptId}
+GET  /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/inbound-shipments/{shipmentId}/receiving-progress
 ```
 
 Location routes keep Tenant and Warehouse explicit, then include only the immediate parent necessary for the resource. Services verify the full ownership chain before use, so a known ID cannot be read or created under another Warehouse or parent path. These routes are structural scoping only; authentication and HTTP authorization remain deferred.
@@ -129,6 +136,8 @@ Location routes keep Tenant and Warehouse explicit, then include only the immedi
 SKU routes are tenant-scoped but Warehouse-independent. Valid SKU codes are returned in canonical uppercase form; case variants identify the same SKU within a Tenant.
 
 Inbound shipment creation is atomic and represents expected, discrete whole-unit quantities only. It has no status transition or receiving behavior; creating it does not create Inventory.
+
+Receiving receipt creation is append-only and supports partial whole-unit receipt. It rejects over-receipt through the scoped Shipment lock and cumulative receipt-history check, but is not retry-safe until required Receiving idempotency is implemented before FO-013 Inventory. Receiving progress is derived from planned and receipt lines; no receiving status/counter is persisted.
 
 The role PATCH request is `{"role":"ADMIN"}` or `{"role":"VIEWER"}`. It is tenant-scoped but is not authenticated or authorized in FO-007. Unknown role enum JSON uses the existing `MALFORMED_JSON` error and a missing/null role uses `VALIDATION_ERROR`.
 

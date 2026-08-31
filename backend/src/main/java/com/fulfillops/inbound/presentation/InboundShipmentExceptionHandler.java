@@ -12,7 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-@RestControllerAdvice(assignableTypes = InboundShipmentController.class)
+@RestControllerAdvice
 public class InboundShipmentExceptionHandler {
     @ExceptionHandler(InboundShipmentNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleNotFound(HttpServletRequest request) { return error(HttpStatus.NOT_FOUND, "INBOUND_SHIPMENT_NOT_FOUND", "Inbound shipment not found.", request); }
