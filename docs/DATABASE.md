@@ -12,6 +12,8 @@ Tenant-owned tables should carry a tenant identifier unless an ADR establishes a
 
 The `fulfillops.tenants` table is the tenancy root, so it is the deliberate exception: it does not contain `tenant_id`. Tenant codes are globally unique and immutable. Future tenant-owned operational tables must carry tenant ownership.
 
+`fulfillops.users` is also global and must not contain `tenant_id`. `fulfillops.tenant_memberships` connects a User to a Tenant and is tenant-scoped: all membership resource queries include the tenant scope. Membership tables store scalar `tenant_id` and `user_id` aggregate references in Java while named PostgreSQL foreign keys retain referential integrity. RBAC is deferred to FO-007.
+
 Likely future constraints:
 
 ```text
@@ -85,6 +87,8 @@ Candidate approaches to evaluate:
 ## 6. Indexing
 
 Every index must answer a query/use case.
+
+A composite unique constraint also provides an index in PostgreSQL. `UNIQUE (tenant_id, user_id)` on tenant memberships supports the current tenant-prefixed membership access pattern; add additional indexes only when a concrete query requires them.
 
 Expected dimensions include tenant, warehouse, SKU, status, external reference, shipment number and timestamps.
 

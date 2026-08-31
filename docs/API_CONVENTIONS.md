@@ -68,6 +68,10 @@ Initial error codes:
 - `MALFORMED_JSON` â€” a request body could not be parsed.
 - `TENANT_NOT_FOUND` â€” a requested Tenant does not exist.
 - `TENANT_CODE_CONFLICT` â€” a Tenant code is already in use.
+- `USER_NOT_FOUND` â€” a requested User does not exist.
+- `USER_EMAIL_CONFLICT` â€” a User email is already in use.
+- `TENANT_MEMBERSHIP_CONFLICT` â€” the User already belongs to the Tenant.
+- `MEMBERSHIP_NOT_FOUND` â€” a requested TenantMembership does not exist in the URL Tenant scope.
 
 Every response includes a server-generated `X-Request-Id` header. For error responses, it exactly matches the `requestId` in the JSON body. Client-provided request IDs are not accepted in this phase.
 
@@ -84,6 +88,15 @@ Retry-prone external create APIs will later support `Idempotency-Key`.
 ## 8. Tenant identity
 
 Do not treat request-supplied `tenantId` as proof of authorization.
+
+Tenant-scoped routes must include their tenant scope in persistence queries. Until authentication is implemented, this is resource scoping rather than authorization. The initial membership routes are:
+
+```text
+POST /api/v1/users
+GET  /api/v1/users/{id}
+POST /api/v1/tenants/{tenantId}/memberships
+GET  /api/v1/tenants/{tenantId}/memberships/{membershipId}
+```
 
 ## 9. Documentation
 

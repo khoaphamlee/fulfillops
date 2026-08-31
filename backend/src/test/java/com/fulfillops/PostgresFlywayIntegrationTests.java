@@ -47,7 +47,7 @@ class PostgresFlywayIntegrationTests {
     private Flyway flyway;
 
     @Test
-    void postgresIsReachableAndFlywayAppliesBothSchemaMigrations() throws Exception {
+    void postgresIsReachableAndFlywayAppliesAllSchemaMigrations() throws Exception {
         assertTrue(POSTGRES.isRunning());
         assertEquals(1, queryForInt("SELECT 1"));
         assertEquals(1, queryForInt("""
@@ -67,12 +67,42 @@ class PostgresFlywayIntegrationTests {
                 """));
         assertEquals(1, queryForInt("""
                 SELECT COUNT(*)
+                FROM public.flyway_schema_history
+                WHERE version = '3' AND success = true
+                """));
+        assertEquals(1, queryForInt("""
+                SELECT COUNT(*)
+                FROM public.flyway_schema_history
+                WHERE version = '4' AND success = true
+                """));
+        assertEquals(1, queryForInt("""
+                SELECT COUNT(*)
                 FROM information_schema.tables
                 WHERE table_schema = 'fulfillops' AND table_name = 'tenants'
                 """));
+        assertEquals(1, queryForInt("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'fulfillops' AND table_name = 'users'
+                """));
+        assertEquals(1, queryForInt("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'fulfillops' AND table_name = 'tenant_memberships'
+                """));
+        assertEquals(1, queryForInt("""
+                SELECT COUNT(*)
+                FROM pg_constraint
+                WHERE conname = 'fk_tenant_memberships_tenant'
+                """));
+        assertEquals(1, queryForInt("""
+                SELECT COUNT(*)
+                FROM pg_constraint
+                WHERE conname = 'fk_tenant_memberships_user'
+                """));
 
         MigrationInfo currentMigration = flyway.info().current();
-        assertEquals("2", currentMigration.getVersion().getVersion());
+        assertEquals("4", currentMigration.getVersion().getVersion());
         assertEquals(MigrationState.SUCCESS, currentMigration.getState());
     }
 

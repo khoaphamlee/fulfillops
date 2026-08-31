@@ -38,9 +38,17 @@ public class TenantService {
 
     @Transactional(readOnly = true)
     public TenantResponse getById(UUID id) {
-        Tenant tenant = tenantRepository.findById(id)
-                .orElseThrow(TenantNotFoundException::new);
+        Tenant tenant = findExistingTenant(id);
         return toResponse(tenant);
+    }
+
+    @Transactional(readOnly = true)
+    public void requireExistingTenant(UUID id) {
+        findExistingTenant(id);
+    }
+
+    private Tenant findExistingTenant(UUID id) {
+        return tenantRepository.findById(id).orElseThrow(TenantNotFoundException::new);
     }
 
     private boolean isTenantCodeUniqueViolation(DataIntegrityViolationException exception) {

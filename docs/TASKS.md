@@ -36,7 +36,7 @@ Status: DONE
 Status: DONE
 
 ### FO-006 — User and tenant membership
-Status: TODO
+Status: DONE
 
 ### FO-007 — Tenant RBAC foundation
 Status: TODO

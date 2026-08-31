@@ -1,9 +1,9 @@
-package com.fulfillops.tenant.presentation;
+package com.fulfillops.user.presentation;
 
 import com.fulfillops.common.api.ApiErrorResponse;
 import com.fulfillops.common.web.RequestIdFilter;
-import com.fulfillops.tenant.application.TenantCodeAlreadyExistsException;
-import com.fulfillops.tenant.application.TenantNotFoundException;
+import com.fulfillops.user.application.UserEmailAlreadyExistsException;
+import com.fulfillops.user.application.UserNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.List;
@@ -13,28 +13,20 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
-public class TenantExceptionHandler {
+public class UserExceptionHandler {
 
-    @ExceptionHandler(TenantNotFoundException.class)
+    @ExceptionHandler(UserNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> handleNotFound(
-            TenantNotFoundException exception,
+            UserNotFoundException exception,
             HttpServletRequest request) {
-        return error(
-                HttpStatus.NOT_FOUND,
-                "TENANT_NOT_FOUND",
-                "Tenant not found.",
-                request);
+        return error(HttpStatus.NOT_FOUND, "USER_NOT_FOUND", "User not found.", request);
     }
 
-    @ExceptionHandler(TenantCodeAlreadyExistsException.class)
-    public ResponseEntity<ApiErrorResponse> handleCodeConflict(
-            TenantCodeAlreadyExistsException exception,
+    @ExceptionHandler(UserEmailAlreadyExistsException.class)
+    public ResponseEntity<ApiErrorResponse> handleEmailConflict(
+            UserEmailAlreadyExistsException exception,
             HttpServletRequest request) {
-        return error(
-                HttpStatus.CONFLICT,
-                "TENANT_CODE_CONFLICT",
-                "Tenant code already exists.",
-                request);
+        return error(HttpStatus.CONFLICT, "USER_EMAIL_CONFLICT", "User email already exists.", request);
     }
 
     private ResponseEntity<ApiErrorResponse> error(

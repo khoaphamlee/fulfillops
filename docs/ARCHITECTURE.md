@@ -41,6 +41,10 @@ A module owns its business rules and persistence model.
 
 Avoid allowing every module to manipulate every other module's repositories directly. Prefer explicit application services/use cases for cross-module workflows.
 
+Across module boundaries, persistence models use scalar aggregate IDs while PostgreSQL foreign keys preserve referential integrity. Cross-module JPA relationships are avoided by default; a navigational relationship needs a concrete ownership or navigation requirement before it is introduced. See ADR-001.
+
+The User module owns global identities. The Tenant module owns the tenancy root. The Membership module connects those aggregates through narrow application methods rather than importing their repositories or JPA entities. RBAC remains deferred to FO-007.
+
 ## 4. Layering guideline
 
 A practical structure may evolve toward:
