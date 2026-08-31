@@ -16,6 +16,8 @@ The `fulfillops.tenants` table is the tenancy root, so it is the deliberate exce
 
 Tenant memberships have exactly one fixed role stored as text: `ADMIN` or `VIEWER`. New and pre-existing memberships use `VIEWER` by default/backfill to preserve least privilege. The `chk_tenant_memberships_role` constraint rejects unknown persisted role values. Membership `updated_at` records real role changes; a same-role request is a no-op. Permissions and custom roles remain deferred.
 
+`fulfillops.warehouses` is the first tenant-owned operational aggregate. It carries immutable scalar `tenant_id` ownership with a named foreign key to the tenancy root. Warehouse code is an immutable lowercase kebab-case identifier unique within its Tenant through `UNIQUE (tenant_id, code)`; it is not globally unique.
+
 Likely future constraints:
 
 ```text

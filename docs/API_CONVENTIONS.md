@@ -72,6 +72,8 @@ Initial error codes:
 - `USER_EMAIL_CONFLICT` â€” a User email is already in use.
 - `TENANT_MEMBERSHIP_CONFLICT` â€” the User already belongs to the Tenant.
 - `MEMBERSHIP_NOT_FOUND` â€” a requested TenantMembership does not exist in the URL Tenant scope.
+- `WAREHOUSE_NOT_FOUND` â€” a requested Warehouse does not exist in the URL Tenant scope.
+- `WAREHOUSE_CODE_CONFLICT` â€” a Warehouse code is already in use in the Tenant.
 
 Every response includes a server-generated `X-Request-Id` header. For error responses, it exactly matches the `requestId` in the JSON body. Client-provided request IDs are not accepted in this phase.
 
@@ -97,6 +99,8 @@ GET  /api/v1/users/{id}
 POST /api/v1/tenants/{tenantId}/memberships
 GET  /api/v1/tenants/{tenantId}/memberships/{membershipId}
 PATCH /api/v1/tenants/{tenantId}/memberships/{membershipId}/role
+POST /api/v1/tenants/{tenantId}/warehouses
+GET  /api/v1/tenants/{tenantId}/warehouses/{warehouseId}
 ```
 
 The role PATCH request is `{"role":"ADMIN"}` or `{"role":"VIEWER"}`. It is tenant-scoped but is not authenticated or authorized in FO-007. Unknown role enum JSON uses the existing `MALFORMED_JSON` error and a missing/null role uses `VALIDATION_ERROR`.

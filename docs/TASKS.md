@@ -42,7 +42,7 @@ Status: DONE
 Status: DONE
 
 ### FO-008 — Warehouse
-Status: TODO
+Status: DONE
 
 ### FO-009 — Warehouse location hierarchy
 Status: TODO

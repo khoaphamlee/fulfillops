@@ -45,6 +45,8 @@ Across module boundaries, persistence models use scalar aggregate IDs while Post
 
 The User module owns global identities. The Tenant module owns the tenancy root. The Membership module connects those aggregates through narrow application methods rather than importing their repositories or JPA entities. Membership also owns the initial fixed RBAC policy: one ADMIN or VIEWER role per membership. This policy is independent of HTTP enforcement; authentication and authorization integration remain deferred.
 
+The Warehouse module owns tenant-scoped warehouse data and depends on Tenant only through its narrow application API for existence checks. Warehouse follows ADR-001 with scalar `tenantId` ownership and does not import Tenant persistence types.
+
 ## 4. Layering guideline
 
 A practical structure may evolve toward:
