@@ -45,7 +45,7 @@ Status: DONE
 Status: DONE
 
 ### FO-009 — Warehouse location hierarchy
-Status: TODO
+Status: DONE
 
 ### FO-010 — SKU / item master
 Status: TODO

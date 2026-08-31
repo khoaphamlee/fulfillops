@@ -75,6 +75,11 @@ Initial error codes:
 - `WAREHOUSE_NOT_FOUND` â€” a requested Warehouse does not exist in the URL Tenant scope.
 - `WAREHOUSE_CODE_CONFLICT` â€” a Warehouse code is already in use in the Tenant.
 
+- `ZONE_NOT_FOUND` / `ZONE_CODE_CONFLICT` — a Zone is absent from its Warehouse scope, or its code is already in use there.
+- `AISLE_NOT_FOUND` / `AISLE_CODE_CONFLICT` — an Aisle is absent from its Zone scope, or its code is already in use there.
+- `RACK_NOT_FOUND` / `RACK_CODE_CONFLICT` — a Rack is absent from its Aisle/Warehouse scope, or its code is already in use there.
+- `BIN_NOT_FOUND` / `BIN_CODE_CONFLICT` — a Bin is absent from its Rack/Warehouse scope, or its code is already in use there.
+
 Every response includes a server-generated `X-Request-Id` header. For error responses, it exactly matches the `requestId` in the JSON body. Client-provided request IDs are not accepted in this phase.
 
 ## 6. Validation
@@ -101,7 +106,17 @@ GET  /api/v1/tenants/{tenantId}/memberships/{membershipId}
 PATCH /api/v1/tenants/{tenantId}/memberships/{membershipId}/role
 POST /api/v1/tenants/{tenantId}/warehouses
 GET  /api/v1/tenants/{tenantId}/warehouses/{warehouseId}
+POST /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/zones
+GET  /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/zones/{zoneId}
+POST /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/zones/{zoneId}/aisles
+GET  /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/zones/{zoneId}/aisles/{aisleId}
+POST /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/aisles/{aisleId}/racks
+GET  /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/aisles/{aisleId}/racks/{rackId}
+POST /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/racks/{rackId}/bins
+GET  /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/racks/{rackId}/bins/{binId}
 ```
+
+Location routes keep Tenant and Warehouse explicit, then include only the immediate parent necessary for the resource. Services verify the full ownership chain before use, so a known ID cannot be read or created under another Warehouse or parent path. These routes are structural scoping only; authentication and HTTP authorization remain deferred.
 
 The role PATCH request is `{"role":"ADMIN"}` or `{"role":"VIEWER"}`. It is tenant-scoped but is not authenticated or authorized in FO-007. Unknown role enum JSON uses the existing `MALFORMED_JSON` error and a missing/null role uses `VALIDATION_ERROR`.
 

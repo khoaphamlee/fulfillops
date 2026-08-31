@@ -18,6 +18,8 @@ Tenant memberships have exactly one fixed role stored as text: `ADMIN` or `VIEWE
 
 `fulfillops.warehouses` is the first tenant-owned operational aggregate. It carries immutable scalar `tenant_id` ownership with a named foreign key to the tenancy root. Warehouse code is an immutable lowercase kebab-case identifier unique within its Tenant through `UNIQUE (tenant_id, code)`; it is not globally unique.
 
+Warehouse physical locations use a fixed normalized hierarchy: Warehouse -> Zone -> Aisle -> Rack -> Bin. `warehouse_zones` references Warehouse, then each lower table references only its immediate parent (`zone_id`, `aisle_id`, or `rack_id`). Lower levels deliberately do not duplicate `tenant_id` or `warehouse_id`; PostgreSQL foreign keys enforce each link and application scoping verifies the ownership chain. Codes are lowercase kebab-case and unique within their immediate parent scope. Bin is the current physical leaf, but FO-009 does not establish inventory or a rule that only Bins may hold stock. See ADR-002.
+
 Likely future constraints:
 
 ```text
@@ -33,7 +35,10 @@ A globally unique technical ID does not remove the need for tenant authorization
 - tenants
 - tenant_memberships
 - warehouses
-- warehouse_locations
+- warehouse_zones
+- warehouse_aisles
+- warehouse_racks
+- warehouse_bins
 - skus
 - inbound_shipments
 - inbound_lines

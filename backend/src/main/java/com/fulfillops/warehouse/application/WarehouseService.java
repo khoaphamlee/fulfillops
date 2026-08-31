@@ -42,10 +42,19 @@ public class WarehouseService {
 
     @Transactional(readOnly = true)
     public WarehouseResponse getById(UUID tenantId, UUID warehouseId) {
-        tenantService.requireExistingTenant(tenantId);
-        Warehouse warehouse = warehouseRepository.findByIdAndTenantId(warehouseId, tenantId)
-                .orElseThrow(WarehouseNotFoundException::new);
+        Warehouse warehouse = requireExistingWarehouseEntity(tenantId, warehouseId);
         return toResponse(warehouse);
+    }
+
+    @Transactional(readOnly = true)
+    public void requireExistingWarehouse(UUID tenantId, UUID warehouseId) {
+        requireExistingWarehouseEntity(tenantId, warehouseId);
+    }
+
+    private Warehouse requireExistingWarehouseEntity(UUID tenantId, UUID warehouseId) {
+        tenantService.requireExistingTenant(tenantId);
+        return warehouseRepository.findByIdAndTenantId(warehouseId, tenantId)
+                .orElseThrow(WarehouseNotFoundException::new);
     }
 
     private boolean isWarehouseTenantCodeUniqueViolation(DataIntegrityViolationException exception) {

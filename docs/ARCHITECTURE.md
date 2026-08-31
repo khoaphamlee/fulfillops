@@ -47,6 +47,8 @@ The User module owns global identities. The Tenant module owns the tenancy root.
 
 The Warehouse module owns tenant-scoped warehouse data and depends on Tenant only through its narrow application API for existence checks. Warehouse follows ADR-001 with scalar `tenantId` ownership and does not import Tenant persistence types.
 
+Warehouse also owns its physical-location sub-feature. Zone, Aisle, Rack, and Bin use scalar immediate-parent IDs and PostgreSQL foreign keys rather than JPA object graphs. Location application services prove the Tenant -> Warehouse -> parent ownership chain before exposing or creating a nested resource; this preserves tenant resource scoping without duplicating ownership columns. The fixed hierarchy representation is recorded in ADR-002.
+
 ## 4. Layering guideline
 
 A practical structure may evolve toward:
