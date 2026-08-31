@@ -20,6 +20,8 @@ Tenant memberships have exactly one fixed role stored as text: `ADMIN` or `VIEWE
 
 Warehouse physical locations use a fixed normalized hierarchy: Warehouse -> Zone -> Aisle -> Rack -> Bin. `warehouse_zones` references Warehouse, then each lower table references only its immediate parent (`zone_id`, `aisle_id`, or `rack_id`). Lower levels deliberately do not duplicate `tenant_id` or `warehouse_id`; PostgreSQL foreign keys enforce each link and application scoping verifies the ownership chain. Codes are lowercase kebab-case and unique within their immediate parent scope. Bin is the current physical leaf, but FO-009 does not establish inventory or a rule that only Bins may hold stock. See ADR-002.
 
+`fulfillops.skus` holds tenant-owned item identities independently of Warehouses and Bins. SKU codes are unique within a Tenant and canonicalized to uppercase using `Locale.ROOT`, so `abc-001` and `ABC-001` identify the same SKU there. The database uniquely constrains `(tenant_id, code)` and rejects noncanonical or malformed persisted codes. SKU remains master data only: Inventory will later connect it to warehouse/bin stock and ledger state.
+
 Likely future constraints:
 
 ```text

@@ -48,7 +48,7 @@ Status: DONE
 Status: DONE
 
 ### FO-010 — SKU / item master
-Status: TODO
+Status: DONE
 
 ### FO-011 — Inbound shipment
 Status: TODO

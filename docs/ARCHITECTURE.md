@@ -49,6 +49,8 @@ The Warehouse module owns tenant-scoped warehouse data and depends on Tenant onl
 
 Warehouse also owns its physical-location sub-feature. Zone, Aisle, Rack, and Bin use scalar immediate-parent IDs and PostgreSQL foreign keys rather than JPA object graphs. Location application services prove the Tenant -> Warehouse -> parent ownership chain before exposing or creating a nested resource; this preserves tenant resource scoping without duplicating ownership columns. The fixed hierarchy representation is recorded in ADR-002.
 
+The Sku module owns tenant-scoped item identities. It depends on Tenant only through the narrow Tenant application API, keeps scalar `tenantId` ownership, and has no Warehouse/Bin persistence relationship. Inventory will compose SKU identity with physical storage later.
+
 ## 4. Layering guideline
 
 A practical structure may evolve toward:

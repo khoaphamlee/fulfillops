@@ -92,6 +92,11 @@ class PostgresFlywayIntegrationTests {
                 """));
         assertEquals(1, queryForInt("""
                 SELECT COUNT(*)
+                FROM public.flyway_schema_history
+                WHERE version = '8' AND success = true
+                """));
+        assertEquals(1, queryForInt("""
+                SELECT COUNT(*)
                 FROM information_schema.tables
                 WHERE table_schema = 'fulfillops' AND table_name = 'tenants'
                 """));
@@ -115,6 +120,11 @@ class PostgresFlywayIntegrationTests {
                 FROM information_schema.tables
                 WHERE table_schema = 'fulfillops'
                   AND table_name IN ('warehouse_zones', 'warehouse_aisles', 'warehouse_racks', 'warehouse_bins')
+                """));
+        assertEquals(1, queryForInt("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'fulfillops' AND table_name = 'skus'
                 """));
         assertEquals(1, queryForInt("""
                 SELECT COUNT(*)
@@ -158,9 +168,12 @@ class PostgresFlywayIntegrationTests {
         assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'chk_warehouse_aisles_code_format'"));
         assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'chk_warehouse_racks_code_format'"));
         assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'chk_warehouse_bins_code_format'"));
+        assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'fk_skus_tenant'"));
+        assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'uk_skus_tenant_code'"));
+        assertEquals(1, queryForInt("SELECT COUNT(*) FROM pg_constraint WHERE conname = 'chk_skus_code_canonical_format'"));
 
         MigrationInfo currentMigration = flyway.info().current();
-        assertEquals("7", currentMigration.getVersion().getVersion());
+        assertEquals("8", currentMigration.getVersion().getVersion());
         assertEquals(MigrationState.SUCCESS, currentMigration.getState());
     }
 
