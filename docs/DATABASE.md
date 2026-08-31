@@ -12,7 +12,9 @@ Tenant-owned tables should carry a tenant identifier unless an ADR establishes a
 
 The `fulfillops.tenants` table is the tenancy root, so it is the deliberate exception: it does not contain `tenant_id`. Tenant codes are globally unique and immutable. Future tenant-owned operational tables must carry tenant ownership.
 
-`fulfillops.users` is also global and must not contain `tenant_id`. `fulfillops.tenant_memberships` connects a User to a Tenant and is tenant-scoped: all membership resource queries include the tenant scope. Membership tables store scalar `tenant_id` and `user_id` aggregate references in Java while named PostgreSQL foreign keys retain referential integrity. RBAC is deferred to FO-007.
+`fulfillops.users` is also global and must not contain `tenant_id`. `fulfillops.tenant_memberships` connects a User to a Tenant and is tenant-scoped: all membership resource queries include the tenant scope. Membership tables store scalar `tenant_id` and `user_id` aggregate references in Java while named PostgreSQL foreign keys retain referential integrity.
+
+Tenant memberships have exactly one fixed role stored as text: `ADMIN` or `VIEWER`. New and pre-existing memberships use `VIEWER` by default/backfill to preserve least privilege. The `chk_tenant_memberships_role` constraint rejects unknown persisted role values. Membership `updated_at` records real role changes; a same-role request is a no-op. Permissions and custom roles remain deferred.
 
 Likely future constraints:
 

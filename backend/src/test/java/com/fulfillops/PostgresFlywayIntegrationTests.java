@@ -77,6 +77,11 @@ class PostgresFlywayIntegrationTests {
                 """));
         assertEquals(1, queryForInt("""
                 SELECT COUNT(*)
+                FROM public.flyway_schema_history
+                WHERE version = '5' AND success = true
+                """));
+        assertEquals(1, queryForInt("""
+                SELECT COUNT(*)
                 FROM information_schema.tables
                 WHERE table_schema = 'fulfillops' AND table_name = 'tenants'
                 """));
@@ -100,9 +105,14 @@ class PostgresFlywayIntegrationTests {
                 FROM pg_constraint
                 WHERE conname = 'fk_tenant_memberships_user'
                 """));
+        assertEquals(1, queryForInt("""
+                SELECT COUNT(*)
+                FROM pg_constraint
+                WHERE conname = 'chk_tenant_memberships_role'
+                """));
 
         MigrationInfo currentMigration = flyway.info().current();
-        assertEquals("4", currentMigration.getVersion().getVersion());
+        assertEquals("5", currentMigration.getVersion().getVersion());
         assertEquals(MigrationState.SUCCESS, currentMigration.getState());
     }
 

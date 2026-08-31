@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -36,5 +37,13 @@ public class TenantMembershipController {
             @PathVariable UUID tenantId,
             @PathVariable UUID membershipId) {
         return tenantMembershipService.getById(tenantId, membershipId);
+    }
+
+    @PatchMapping("/{membershipId}/role")
+    public TenantMembershipResponse changeRole(
+            @PathVariable UUID tenantId,
+            @PathVariable UUID membershipId,
+            @Valid @RequestBody ChangeTenantMembershipRoleRequest request) {
+        return tenantMembershipService.changeRole(tenantId, membershipId, request.role());
     }
 }

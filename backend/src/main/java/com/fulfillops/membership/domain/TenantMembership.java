@@ -2,10 +2,14 @@ package com.fulfillops.membership.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.UUID;
 
 @Entity
@@ -22,8 +26,15 @@ public class TenantMembership {
     @Column(nullable = false, updatable = false)
     private UUID userId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private TenantRole role;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
+
+    @Column(nullable = false)
+    private Instant updatedAt;
 
     protected TenantMembership() {
     }
@@ -32,6 +43,7 @@ public class TenantMembership {
         this.id = id;
         this.tenantId = tenantId;
         this.userId = userId;
+        this.role = TenantRole.VIEWER;
     }
 
     public static TenantMembership create(UUID tenantId, UUID userId) {
@@ -40,7 +52,23 @@ public class TenantMembership {
 
     @PrePersist
     void initializeCreatedAt() {
-        createdAt = Instant.now();
+        Instant now = Instant.now();
+        createdAt = now;
+        updatedAt = now;
+    }
+
+    @PreUpdate
+    void updateTimestamp() {
+        updatedAt = Instant.now();
+    }
+
+    public boolean changeRole(TenantRole role) {
+        TenantRole requestedRole = Objects.requireNonNull(role, "role must not be null");
+        if (this.role == requestedRole) {
+            return false;
+        }
+        this.role = requestedRole;
+        return true;
     }
 
     public UUID getId() {
@@ -55,7 +83,15 @@ public class TenantMembership {
         return userId;
     }
 
+    public TenantRole getRole() {
+        return role;
+    }
+
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getUpdatedAt() {
+        return updatedAt;
     }
 }

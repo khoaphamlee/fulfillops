@@ -39,7 +39,7 @@ Status: DONE
 Status: DONE
 
 ### FO-007 — Tenant RBAC foundation
-Status: TODO
+Status: DONE
 
 ### FO-008 — Warehouse
 Status: TODO

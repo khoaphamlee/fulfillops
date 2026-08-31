@@ -147,11 +147,14 @@ class UserAndTenantMembershipApiIntegrationTests {
         TenantMembership membership = tenantMembershipRepository.findById(membershipId).orElseThrow();
         assertEquals(tenantId, membership.getTenantId());
         assertEquals(userId, membership.getUserId());
+        assertEquals("VIEWER", membership.getRole().name());
 
         HttpResponse<String> getResponse = get("/api/v1/tenants/" + tenantId + "/memberships/" + membershipId);
         assertEquals(200, getResponse.statusCode());
         assertTrue(getResponse.body().contains("\"tenantId\":\"" + tenantId + "\""));
         assertTrue(getResponse.body().contains("\"userId\":\"" + userId + "\""));
+        assertTrue(getResponse.body().contains("\"role\":\"VIEWER\""));
+        assertTrue(getResponse.body().contains("\"updatedAt\":"));
     }
 
     @Test
@@ -202,23 +205,86 @@ class UserAndTenantMembershipApiIntegrationTests {
     }
 
     @Test
+    void roleChangePersistsAdvancesTimestampAndSameRoleIsANoOp() throws Exception {
+        UUID tenantId = createTenant("role-change-tenant");
+        UUID userId = createUser("role-change@example.com");
+        UUID membershipId = UUID.fromString(extract(ID_PATTERN, createMembership(tenantId, userId).body()));
+        TenantMembership beforeChange = tenantMembershipRepository.findById(membershipId).orElseThrow();
+        Instant beforeUpdatedAt = beforeChange.getUpdatedAt();
+
+        HttpResponse<String> changeResponse = patchJson(
+                "/api/v1/tenants/" + tenantId + "/memberships/" + membershipId + "/role",
+                """
+                {"role":"ADMIN"}
+                """);
+        assertEquals(200, changeResponse.statusCode());
+        assertTrue(changeResponse.body().contains("\"role\":\"ADMIN\""));
+
+        TenantMembership afterChange = tenantMembershipRepository.findById(membershipId).orElseThrow();
+        assertEquals("ADMIN", afterChange.getRole().name());
+        assertTrue(afterChange.getUpdatedAt().isAfter(beforeUpdatedAt));
+        Instant afterChangeUpdatedAt = afterChange.getUpdatedAt();
+
+        HttpResponse<String> sameRoleResponse = patchJson(
+                "/api/v1/tenants/" + tenantId + "/memberships/" + membershipId + "/role",
+                """
+                {"role":"ADMIN"}
+                """);
+        assertEquals(200, sameRoleResponse.statusCode());
+        TenantMembership afterNoOp = tenantMembershipRepository.findById(membershipId).orElseThrow();
+        assertEquals(afterChangeUpdatedAt, afterNoOp.getUpdatedAt());
+    }
+
+    @Test
+    void roleChangeIsTenantScopedAndInvalidRoleRequestsUseExistingErrors() throws Exception {
+        UUID tenantA = createTenant("role-tenant-a");
+        UUID tenantB = createTenant("role-tenant-b");
+        UUID membershipId = UUID.fromString(extract(ID_PATTERN,
+                createMembership(tenantB, createUser("role-scope@example.com")).body()));
+
+        HttpResponse<String> crossTenantResponse = patchJson(
+                "/api/v1/tenants/" + tenantA + "/memberships/" + membershipId + "/role",
+                """
+                {"role":"ADMIN"}
+                """);
+        assertStandardError(crossTenantResponse, 404, "MEMBERSHIP_NOT_FOUND",
+                "/api/v1/tenants/" + tenantA + "/memberships/" + membershipId + "/role");
+        assertEquals("VIEWER", tenantMembershipRepository.findById(membershipId).orElseThrow().getRole().name());
+
+        HttpResponse<String> invalidRoleResponse = patchJson(
+                "/api/v1/tenants/" + tenantB + "/memberships/" + membershipId + "/role",
+                """
+                {"role":"OPERATOR"}
+                """);
+        assertStandardError(invalidRoleResponse, 400, "MALFORMED_JSON",
+                "/api/v1/tenants/" + tenantB + "/memberships/" + membershipId + "/role");
+
+        HttpResponse<String> missingRoleResponse = patchJson(
+                "/api/v1/tenants/" + tenantB + "/memberships/" + membershipId + "/role",
+                "{}"
+        );
+        assertStandardError(missingRoleResponse, 400, "VALIDATION_ERROR",
+                "/api/v1/tenants/" + tenantB + "/memberships/" + membershipId + "/role");
+    }
+
+    @Test
     void databaseForeignKeysAndUniqueConstraintsRemainActive() throws Exception {
         UUID tenantId = createTenant("foreign-key-tenant");
         UUID userId = createUser("foreign-key@example.com");
         executeUpdate("""
-                INSERT INTO fulfillops.tenant_memberships (id, tenant_id, user_id, created_at)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT INTO fulfillops.tenant_memberships (id, tenant_id, user_id, role, created_at, updated_at)
+                VALUES (?, ?, ?, 'VIEWER', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """, UUID.randomUUID(), tenantId, userId);
 
         PSQLException duplicate = assertThrows(PSQLException.class, () -> executeUpdate("""
-                INSERT INTO fulfillops.tenant_memberships (id, tenant_id, user_id, created_at)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT INTO fulfillops.tenant_memberships (id, tenant_id, user_id, role, created_at, updated_at)
+                VALUES (?, ?, ?, 'VIEWER', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """, UUID.randomUUID(), tenantId, userId));
         assertEquals("uk_tenant_memberships_tenant_user", duplicate.getServerErrorMessage().getConstraint());
 
         PSQLException foreignKey = assertThrows(PSQLException.class, () -> executeUpdate("""
-                INSERT INTO fulfillops.tenant_memberships (id, tenant_id, user_id, created_at)
-                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT INTO fulfillops.tenant_memberships (id, tenant_id, user_id, role, created_at, updated_at)
+                VALUES (?, ?, ?, 'VIEWER', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """, UUID.randomUUID(), UUID.randomUUID(), userId));
         assertEquals("fk_tenant_memberships_tenant", foreignKey.getServerErrorMessage().getConstraint());
     }
@@ -230,6 +296,7 @@ class UserAndTenantMembershipApiIntegrationTests {
         assertEquals(200, response.statusCode());
         assertTrue(response.body().contains("/api/v1/users"));
         assertTrue(response.body().contains("/api/v1/tenants/{tenantId}/memberships"));
+        assertTrue(response.body().contains("/api/v1/tenants/{tenantId}/memberships/{membershipId}/role"));
     }
 
     private UUID createTenant(String code) {
@@ -259,6 +326,15 @@ class UserAndTenantMembershipApiIntegrationTests {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://localhost:" + port + path))
                 .GET()
+                .build();
+        return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> patchJson(String path, String body) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + path))
+                .header("Content-Type", "application/json")
+                .method("PATCH", HttpRequest.BodyPublishers.ofString(body))
                 .build();
         return HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     }

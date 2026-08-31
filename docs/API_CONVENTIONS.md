@@ -96,7 +96,10 @@ POST /api/v1/users
 GET  /api/v1/users/{id}
 POST /api/v1/tenants/{tenantId}/memberships
 GET  /api/v1/tenants/{tenantId}/memberships/{membershipId}
+PATCH /api/v1/tenants/{tenantId}/memberships/{membershipId}/role
 ```
+
+The role PATCH request is `{"role":"ADMIN"}` or `{"role":"VIEWER"}`. It is tenant-scoped but is not authenticated or authorized in FO-007. Unknown role enum JSON uses the existing `MALFORMED_JSON` error and a missing/null role uses `VALIDATION_ERROR`.
 
 ## 9. Documentation
 

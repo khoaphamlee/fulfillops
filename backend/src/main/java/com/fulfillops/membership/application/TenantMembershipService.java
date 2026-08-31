@@ -1,6 +1,7 @@
 package com.fulfillops.membership.application;
 
 import com.fulfillops.membership.domain.TenantMembership;
+import com.fulfillops.membership.domain.TenantRole;
 import com.fulfillops.membership.infrastructure.TenantMembershipRepository;
 import com.fulfillops.membership.presentation.CreateTenantMembershipRequest;
 import com.fulfillops.membership.presentation.TenantMembershipResponse;
@@ -50,9 +51,23 @@ public class TenantMembershipService {
     @Transactional(readOnly = true)
     public TenantMembershipResponse getById(UUID tenantId, UUID membershipId) {
         tenantService.requireExistingTenant(tenantId);
-        TenantMembership membership = tenantMembershipRepository.findByIdAndTenantId(membershipId, tenantId)
-                .orElseThrow(TenantMembershipNotFoundException::new);
+        TenantMembership membership = findMembershipInTenant(tenantId, membershipId);
         return toResponse(membership);
+    }
+
+    @Transactional
+    public TenantMembershipResponse changeRole(UUID tenantId, UUID membershipId, TenantRole role) {
+        tenantService.requireExistingTenant(tenantId);
+        TenantMembership membership = findMembershipInTenant(tenantId, membershipId);
+        if (membership.changeRole(role)) {
+            tenantMembershipRepository.flush();
+        }
+        return toResponse(membership);
+    }
+
+    private TenantMembership findMembershipInTenant(UUID tenantId, UUID membershipId) {
+        return tenantMembershipRepository.findByIdAndTenantId(membershipId, tenantId)
+                .orElseThrow(TenantMembershipNotFoundException::new);
     }
 
     private boolean isTenantMembershipUniqueViolation(DataIntegrityViolationException exception) {
@@ -73,6 +88,8 @@ public class TenantMembershipService {
                 membership.getId(),
                 membership.getTenantId(),
                 membership.getUserId(),
-                membership.getCreatedAt());
+                membership.getRole(),
+                membership.getCreatedAt(),
+                membership.getUpdatedAt());
     }
 }
