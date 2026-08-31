@@ -3,6 +3,7 @@ package com.fulfillops.tenant;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fulfillops.support.AbstractPostgresApplicationIntegrationTest;
 import com.fulfillops.tenant.domain.Tenant;
 import com.fulfillops.tenant.infrastructure.TenantRepository;
 import java.net.URI;
@@ -16,45 +17,19 @@ import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
-@Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class TenantApiIntegrationTests {
+class TenantApiIntegrationTests extends AbstractPostgresApplicationIntegrationTest {
 
     private static final Pattern ID_PATTERN = Pattern.compile("\\\"id\\\":\\\"([^\\\"]+)\\\"");
     private static final Pattern REQUEST_ID_PATTERN = Pattern.compile("\\\"requestId\\\":\\\"([^\\\"]+)\\\"");
     private static final Pattern TIMESTAMP_PATTERN = Pattern.compile("\\\"timestamp\\\":\\\"([^\\\"]+)\\\"");
-
-    @Container
-    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine")
-            .withDatabaseName("fulfillops_tenant_test")
-            .withUsername("fulfillops_test")
-            .withPassword("fulfillops_test");
 
     @LocalServerPort
     private int port;
 
     @Autowired
     private TenantRepository tenantRepository;
-
-    @DynamicPropertySource
-    static void configureDatasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.username", POSTGRES::getUsername);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
-    }
-
-    @AfterEach
-    void clearTenantData() {
-        tenantRepository.deleteAll();
-    }
 
     @Test
     void postCreatesTenantThatCanBeReadBackAndFetchedById() throws Exception {

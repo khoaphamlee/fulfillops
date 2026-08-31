@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fulfillops.support.MigrationPostgres;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -13,20 +14,18 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.postgresql.util.PSQLException;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
-@Testcontainers
 class TenantMembershipRoleMigrationIntegrationTests {
 
-    @Container
-    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine")
-            .withDatabaseName("fulfillops_role_migration_test")
-            .withUsername("fulfillops_test")
-            .withPassword("fulfillops_test");
+    private static final String DATABASE = "fulfillops_role_migration_test";
+
+    @BeforeEach
+    void resetMigrationDatabase() {
+        MigrationPostgres.resetDatabase(DATABASE);
+    }
 
     @Test
     void v5BackfillsExistingV4MembershipAndEnforcesRoleConstraints() throws Exception {
@@ -71,9 +70,33 @@ class TenantMembershipRoleMigrationIntegrationTests {
         assertEquals("chk_tenant_memberships_role", exception.getServerErrorMessage().getConstraint());
     }
 
+    @Test
+    void resetCreatesAnEmptyDatabaseForAnotherMigrationScenario() throws Exception {
+        migrateToVersion("4");
+        assertEquals(1, queryForInt("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'fulfillops' AND table_name = 'tenant_memberships'
+                """));
+
+        MigrationPostgres.resetDatabase(DATABASE);
+
+        assertEquals(0, queryForInt("""
+                SELECT COUNT(*)
+                FROM information_schema.schemata
+                WHERE schema_name = 'fulfillops'
+                """));
+        migrateToVersion("4");
+        assertEquals(1, queryForInt("""
+                SELECT COUNT(*)
+                FROM information_schema.tables
+                WHERE table_schema = 'fulfillops' AND table_name = 'tenant_memberships'
+                """));
+    }
+
     private void migrateToVersion(String version) {
         Flyway.configure()
-                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .dataSource(MigrationPostgres.jdbcUrl(DATABASE), MigrationPostgres.username(), MigrationPostgres.password())
                 .locations("classpath:db/migration")
                 .target(version)
                 .load()
@@ -82,7 +105,7 @@ class TenantMembershipRoleMigrationIntegrationTests {
 
     private void migrateToLatest() {
         Flyway.configure()
-                .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+                .dataSource(MigrationPostgres.jdbcUrl(DATABASE), MigrationPostgres.username(), MigrationPostgres.password())
                 .locations("classpath:db/migration")
                 .load()
                 .migrate();
@@ -145,6 +168,7 @@ class TenantMembershipRoleMigrationIntegrationTests {
     }
 
     private Connection connection() throws SQLException {
-        return java.sql.DriverManager.getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+        return java.sql.DriverManager.getConnection(
+                MigrationPostgres.jdbcUrl(DATABASE), MigrationPostgres.username(), MigrationPostgres.password());
     }
 }

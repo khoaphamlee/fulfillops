@@ -3,6 +3,7 @@ package com.fulfillops;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fulfillops.support.AbstractPostgresApplicationIntegrationTest;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -12,33 +13,8 @@ import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.MigrationState;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
-@Testcontainers
-@SpringBootTest(properties = {
-        "spring.autoconfigure.exclude=",
-        "spring.flyway.enabled=true",
-        "management.health.db.enabled=true"
-})
-class PostgresFlywayIntegrationTests {
-
-    @Container
-    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine")
-            .withDatabaseName("fulfillops_test")
-            .withUsername("fulfillops_test")
-            .withPassword("fulfillops_test");
-
-    @DynamicPropertySource
-    static void configureDatasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.username", POSTGRES::getUsername);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
-    }
+class PostgresFlywayIntegrationTests extends AbstractPostgresApplicationIntegrationTest {
 
     @Autowired
     private DataSource dataSource;
@@ -48,7 +24,6 @@ class PostgresFlywayIntegrationTests {
 
     @Test
     void postgresIsReachableAndFlywayAppliesAllSchemaMigrations() throws Exception {
-        assertTrue(POSTGRES.isRunning());
         assertEquals(1, queryForInt("SELECT 1"));
         assertEquals(1, queryForInt("""
                 SELECT COUNT(*)

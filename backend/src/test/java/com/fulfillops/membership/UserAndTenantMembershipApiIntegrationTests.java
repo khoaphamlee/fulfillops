@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fulfillops.support.AbstractPostgresApplicationIntegrationTest;
 import com.fulfillops.membership.domain.TenantMembership;
 import com.fulfillops.membership.infrastructure.TenantMembershipRepository;
 import com.fulfillops.tenant.domain.Tenant;
@@ -22,31 +23,16 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.sql.DataSource;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.postgresql.util.PSQLException;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 
-@Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-class UserAndTenantMembershipApiIntegrationTests {
+class UserAndTenantMembershipApiIntegrationTests extends AbstractPostgresApplicationIntegrationTest {
 
     private static final Pattern ID_PATTERN = Pattern.compile("\\\"id\\\":\\\"([^\\\"]+)\\\"");
     private static final Pattern REQUEST_ID_PATTERN = Pattern.compile("\\\"requestId\\\":\\\"([^\\\"]+)\\\"");
     private static final Pattern TIMESTAMP_PATTERN = Pattern.compile("\\\"timestamp\\\":\\\"([^\\\"]+)\\\"");
-
-    @Container
-    private static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:17-alpine")
-            .withDatabaseName("fulfillops_membership_test")
-            .withUsername("fulfillops_test")
-            .withPassword("fulfillops_test");
 
     @LocalServerPort
     private int port;
@@ -62,20 +48,6 @@ class UserAndTenantMembershipApiIntegrationTests {
 
     @Autowired
     private DataSource dataSource;
-
-    @DynamicPropertySource
-    static void configureDatasource(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
-        registry.add("spring.datasource.username", POSTGRES::getUsername);
-        registry.add("spring.datasource.password", POSTGRES::getPassword);
-    }
-
-    @AfterEach
-    void clearData() {
-        tenantMembershipRepository.deleteAll();
-        tenantRepository.deleteAll();
-        userRepository.deleteAll();
-    }
 
     @Test
     void userCanBeCreatedPersistedCanonicalizedAndRead() throws Exception {
