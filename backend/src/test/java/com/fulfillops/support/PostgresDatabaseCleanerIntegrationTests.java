@@ -28,7 +28,7 @@ class PostgresDatabaseCleanerIntegrationTests extends AbstractPostgresApplicatio
         new PostgresDatabaseCleaner().clean(dataSource);
 
         assertEquals(0, count("SELECT COUNT(*) FROM fulfillops.tenants"));
-        assertEquals(10, count("SELECT COUNT(*) FROM public.flyway_schema_history WHERE success = true"));
+        assertEquals(11, count("SELECT COUNT(*) FROM public.flyway_schema_history WHERE success = true"));
     }
 
     @Test

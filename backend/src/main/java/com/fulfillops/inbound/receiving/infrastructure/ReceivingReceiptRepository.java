@@ -7,4 +7,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ReceivingReceiptRepository extends JpaRepository<ReceivingReceipt, UUID> {
     Optional<ReceivingReceipt> findByIdAndTenantIdAndInboundShipmentId(UUID id, UUID tenantId, UUID inboundShipmentId);
+    Optional<ReceivingReceipt> findByTenantIdAndInboundShipmentIdAndIdempotencyKey(UUID tenantId, UUID inboundShipmentId, String idempotencyKey);
 }

@@ -6,6 +6,7 @@ import com.fulfillops.inbound.receiving.application.ReceivingDuplicateLineExcept
 import com.fulfillops.inbound.receiving.application.ReceivingPlannedLineNotFoundException;
 import com.fulfillops.inbound.receiving.application.ReceivingQuantityExceedsExpectedException;
 import com.fulfillops.inbound.receiving.application.ReceivingReceiptNotFoundException;
+import com.fulfillops.inbound.receiving.application.ReceivingIdempotencyKeyReusedWithDifferentRequestException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
 import java.util.List;
@@ -16,6 +17,12 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice(assignableTypes = ReceivingReceiptController.class)
 public class ReceivingExceptionHandler {
+    @ExceptionHandler(ReceivingIdempotencyKeyRequiredException.class)
+    public ResponseEntity<ApiErrorResponse> idempotencyKeyRequired(HttpServletRequest request) { return error(HttpStatus.BAD_REQUEST, "RECEIVING_IDEMPOTENCY_KEY_REQUIRED", "Idempotency-Key header is required.", request); }
+    @ExceptionHandler(ReceivingIdempotencyKeyInvalidException.class)
+    public ResponseEntity<ApiErrorResponse> idempotencyKeyInvalid(HttpServletRequest request) { return error(HttpStatus.BAD_REQUEST, "RECEIVING_IDEMPOTENCY_KEY_INVALID", "Idempotency-Key header is invalid.", request); }
+    @ExceptionHandler(ReceivingIdempotencyKeyReusedWithDifferentRequestException.class)
+    public ResponseEntity<ApiErrorResponse> idempotencyKeyReusedWithDifferentRequest(HttpServletRequest request) { return error(HttpStatus.CONFLICT, "RECEIVING_IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST", "Idempotency-Key was already used with a different receiving request.", request); }
     @ExceptionHandler(ReceivingReceiptNotFoundException.class)
     public ResponseEntity<ApiErrorResponse> receiptNotFound(HttpServletRequest request) { return error(HttpStatus.NOT_FOUND, "RECEIVING_RECEIPT_NOT_FOUND", "Receiving receipt not found.", request); }
     @ExceptionHandler(ReceivingPlannedLineNotFoundException.class)

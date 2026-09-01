@@ -98,7 +98,9 @@ FO-003 handles request-body validation. Support for method-level query/path para
 
 ## 7. Idempotency
 
-Retry-prone external create APIs will later support `Idempotency-Key`.
+Receiving Receipt POST requires the case-sensitive `Idempotency-Key` header. A key is 1-128 characters matching `[A-Za-z0-9._:-]+`; it is never trimmed or canonicalized. Missing keys return `RECEIVING_IDEMPOTENCY_KEY_REQUIRED` (400), invalid keys return `RECEIVING_IDEMPOTENCY_KEY_INVALID` (400), and the policy is Receiving-specific rather than a platform-wide idempotency contract.
+
+The key scope is Tenant plus InboundShipment. The first successful command returns `201 Created` and a Receipt Location. A retry with the same key and same semantic request returns `200 OK`, the same Receipt Location, and the same Receipt resource without creating another physical receipt. A reused key with a different semantic request returns `RECEIVING_IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST` (409). Replay represents the persisted Receipt using current derived receiving quantities; it is not a byte-for-byte historical HTTP-response snapshot.
 
 ## 8. Tenant identity
 
@@ -137,7 +139,7 @@ SKU routes are tenant-scoped but Warehouse-independent. Valid SKU codes are retu
 
 Inbound shipment creation is atomic and represents expected, discrete whole-unit quantities only. It has no status transition or receiving behavior; creating it does not create Inventory.
 
-Receiving receipt creation is append-only and supports partial whole-unit receipt. It rejects over-receipt through the scoped Shipment lock and cumulative receipt-history check, but is not retry-safe until required Receiving idempotency is implemented before FO-013 Inventory. Receiving progress is derived from planned and receipt lines; no receiving status/counter is persisted.
+Receiving receipt creation is append-only and supports partial whole-unit receipt. It rejects over-receipt through the scoped Shipment lock and cumulative receipt-history check. Receipt POST requires the Receiving-specific Idempotency-Key behavior above; Receiving progress is derived from planned and receipt lines, with no persisted receiving status/counter.
 
 The role PATCH request is `{"role":"ADMIN"}` or `{"role":"VIEWER"}`. It is tenant-scoped but is not authenticated or authorized in FO-007. Unknown role enum JSON uses the existing `MALFORMED_JSON` error and a missing/null role uses `VALIDATION_ERROR`.
 

@@ -56,6 +56,15 @@ Status: DONE
 ### FO-012 — Receiving workflow
 Status: DONE
 
+### FO-012.5 — Receiving idempotency
+Status: DONE
+
+Scope:
+- require a Receiving-specific persisted Idempotency-Key for Receipt POST,
+- replay the original Receipt for a same-key semantic retry,
+- reject same-key different-command retries,
+- preserve Receiving concurrency and migration correctness before Inventory.
+
 ### FO-013 — Inventory balance foundation
 Status: TODO
 

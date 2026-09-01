@@ -31,30 +31,47 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ReceivingService {
     private static final String DUPLICATE_LINE_CONSTRAINT = "uk_receiving_receipt_lines_receipt_planned_line";
+    private static final String IDEMPOTENCY_CONSTRAINT = "uk_receiving_receipts_tenant_shipment_idempotency_key";
     private final InboundShipmentRepository shipmentRepository;
     private final InboundShipmentLineRepository plannedLineRepository;
     private final ReceivingReceiptRepository receiptRepository;
     private final ReceivingReceiptLineRepository receiptLineRepository;
     private final WarehouseService warehouseService;
+    private final ReceivingRequestFingerprint requestFingerprint;
 
-    public ReceivingService(InboundShipmentRepository shipmentRepository, InboundShipmentLineRepository plannedLineRepository, ReceivingReceiptRepository receiptRepository, ReceivingReceiptLineRepository receiptLineRepository, WarehouseService warehouseService) {
+    public ReceivingService(InboundShipmentRepository shipmentRepository, InboundShipmentLineRepository plannedLineRepository, ReceivingReceiptRepository receiptRepository, ReceivingReceiptLineRepository receiptLineRepository, WarehouseService warehouseService, ReceivingRequestFingerprint requestFingerprint) {
         this.shipmentRepository = shipmentRepository;
         this.plannedLineRepository = plannedLineRepository;
         this.receiptRepository = receiptRepository;
         this.receiptLineRepository = receiptLineRepository;
         this.warehouseService = warehouseService;
+        this.requestFingerprint = requestFingerprint;
     }
 
     @Transactional
-    public ReceivingReceiptResponse create(UUID tenantId, UUID warehouseId, UUID shipmentId, CreateReceivingReceiptRequest request) {
+    public ReceivingReceiptCreationResult create(UUID tenantId, UUID warehouseId, UUID shipmentId, String idempotencyKey, CreateReceivingReceiptRequest request) {
         warehouseService.requireExistingWarehouse(tenantId, warehouseId);
         InboundShipment shipment = shipmentRepository.findScopedForUpdate(shipmentId, tenantId, warehouseId)
                 .orElseThrow(InboundShipmentNotFoundException::new);
+        validateNoDuplicateRequestedLines(request.lines());
+        String fingerprint = requestFingerprint.calculate(tenantId, shipmentId, request.lines());
+        ReceivingReceipt existingReceipt = receiptRepository.findByTenantIdAndInboundShipmentIdAndIdempotencyKey(tenantId, shipmentId, idempotencyKey).orElse(null);
+        if (existingReceipt != null) {
+            if (!fingerprint.equals(existingReceipt.getRequestFingerprint())) throw new ReceivingIdempotencyKeyReusedWithDifferentRequestException();
+            return new ReceivingReceiptCreationResult(toReceiptResponse(existingReceipt, receiptLineRepository.findByReceivingReceiptId(existingReceipt.getId()), cumulativeQuantities(tenantId, shipmentId)), true);
+        }
+
         Map<UUID, InboundShipmentLine> plannedLines = validateRequestedLines(tenantId, shipmentId, request.lines());
         Map<UUID, Long> cumulative = cumulativeQuantities(tenantId, shipmentId);
         validateRemainingQuantities(request.lines(), plannedLines, cumulative);
 
-        ReceivingReceipt receipt = receiptRepository.saveAndFlush(ReceivingReceipt.create(tenantId, shipment.getId()));
+        ReceivingReceipt receipt;
+        try {
+            receipt = receiptRepository.saveAndFlush(ReceivingReceipt.create(tenantId, shipment.getId(), idempotencyKey, fingerprint));
+        } catch (DataIntegrityViolationException exception) {
+            if (isIdempotencyUniqueViolation(exception)) throw new ReceivingIdempotencyUniqueRaceException(fingerprint, exception);
+            throw exception;
+        }
         List<ReceivingReceiptLine> receiptLines = request.lines().stream()
                 .map(line -> ReceivingReceiptLine.create(tenantId, shipment.getId(), receipt.getId(), line.inboundShipmentLineId(), line.receivedQuantity()))
                 .toList();
@@ -66,7 +83,7 @@ public class ReceivingService {
             throw exception;
         }
         Map<UUID, Long> cumulativeAfter = cumulativeQuantities(tenantId, shipmentId);
-        return toReceiptResponse(receipt, receiptLines, cumulativeAfter);
+        return new ReceivingReceiptCreationResult(toReceiptResponse(receipt, receiptLines, cumulativeAfter), false);
     }
 
     @Transactional(readOnly = true)
@@ -96,11 +113,16 @@ public class ReceivingService {
                 .orElseThrow(InboundShipmentNotFoundException::new);
     }
 
-    private Map<UUID, InboundShipmentLine> validateRequestedLines(UUID tenantId, UUID shipmentId, List<CreateReceivingReceiptLineRequest> requests) {
+    private void validateNoDuplicateRequestedLines(List<CreateReceivingReceiptLineRequest> requests) {
         Set<UUID> lineIds = new HashSet<>();
-        Map<UUID, InboundShipmentLine> lines = new HashMap<>();
         for (CreateReceivingReceiptLineRequest request : requests) {
             if (!lineIds.add(request.inboundShipmentLineId())) throw new ReceivingDuplicateLineException();
+        }
+    }
+
+    private Map<UUID, InboundShipmentLine> validateRequestedLines(UUID tenantId, UUID shipmentId, List<CreateReceivingReceiptLineRequest> requests) {
+        Map<UUID, InboundShipmentLine> lines = new HashMap<>();
+        for (CreateReceivingReceiptLineRequest request : requests) {
             InboundShipmentLine line = plannedLineRepository.findByIdAndTenantIdAndInboundShipmentId(request.inboundShipmentLineId(), tenantId, shipmentId)
                     .orElseThrow(ReceivingPlannedLineNotFoundException::new);
             lines.put(line.getId(), line);
@@ -129,6 +151,15 @@ public class ReceivingService {
         Throwable cause = exception;
         while (cause != null) {
             if (cause instanceof ConstraintViolationException violation && violation.getKind() == ConstraintKind.UNIQUE && DUPLICATE_LINE_CONSTRAINT.equals(violation.getConstraintName())) return true;
+            cause = cause.getCause();
+        }
+        return false;
+    }
+
+    private boolean isIdempotencyUniqueViolation(DataIntegrityViolationException exception) {
+        Throwable cause = exception;
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException violation && violation.getKind() == ConstraintKind.UNIQUE && IDEMPOTENCY_CONSTRAINT.equals(violation.getConstraintName())) return true;
             cause = cause.getCause();
         }
         return false;

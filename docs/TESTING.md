@@ -52,6 +52,8 @@ Suite-level JUnit parallel execution is disabled while tests share the mutable a
 
 Static containers are shared once per Surefire JVM. If Maven test forks are enabled later, each fork starts its own pair of containers.
 
+Receiving idempotency tests use the shared application server to prove persisted same-key replay, mismatch conflicts, Tenant/Shipment key scope, and real concurrent same-key receipt posting. Migration evolution tests use the separate migration server to prove that pre-idempotency Receipt rows migrate with null metadata.
+
 ## 6. Task report
 
 Report:

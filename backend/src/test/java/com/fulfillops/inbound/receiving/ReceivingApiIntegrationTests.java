@@ -105,10 +105,12 @@ class ReceivingApiIntegrationTests extends AbstractPostgresApplicationIntegratio
         assertEquals("chk_receiving_receipt_lines_received_quantity", quantity.getServerErrorMessage().getConstraint());
     }
 
-    @Test void failureAfterReceiptRootFlushRollsBackReceiptAndLines() {
+    @Test void failureAfterReceiptRootFlushRollsBackReceiptAndLines() throws Exception {
         Fixture fixture = fixture(10, 10);
-        assertThrows(DataIntegrityViolationException.class, () -> receivingService.create(fixture.tenantId(), fixture.warehouseId(), fixture.shipmentId(), new CreateReceivingReceiptRequest(List.of(new CreateReceivingReceiptLineRequest(fixture.firstLineId(), 0L)))));
+        String key = "rollback-key";
+        assertThrows(DataIntegrityViolationException.class, () -> receivingService.create(fixture.tenantId(), fixture.warehouseId(), fixture.shipmentId(), key, new CreateReceivingReceiptRequest(List.of(new CreateReceivingReceiptLineRequest(fixture.firstLineId(), 0L)))));
         assertFalse(receiptRepository.findAll().iterator().hasNext()); assertFalse(receiptLineRepository.findAll().iterator().hasNext());
+        assertEquals(201, receiveWithKey(fixture, key, fixture.firstLineId(), 1).statusCode());
     }
 
     @Test void pessimisticShipmentLockPreventsConcurrentOverReceipt() throws Exception {
@@ -131,18 +133,87 @@ class ReceivingApiIntegrationTests extends AbstractPostgresApplicationIntegratio
         assertTrue(response.body().contains("/api/v1/tenants/{tenantId}/warehouses/{warehouseId}/inbound-shipments/{shipmentId}/receipts"));
         assertTrue(response.body().contains("/api/v1/tenants/{tenantId}/warehouses/{warehouseId}/inbound-shipments/{shipmentId}/receipts/{receiptId}"));
         assertTrue(response.body().contains("/api/v1/tenants/{tenantId}/warehouses/{warehouseId}/inbound-shipments/{shipmentId}/receiving-progress"));
+        assertTrue(response.body().contains("Idempotency-Key"));
+    }
+
+    @Test void idempotencyHeaderIsRequiredAndValidated() throws Exception {
+        Fixture fixture = fixture(10, 10); String body = receiptBody(fixture.firstLineId(), 1, null, null);
+        assertError(post(receiptsPath(fixture), body), 400, "RECEIVING_IDEMPOTENCY_KEY_REQUIRED");
+        assertError(post(receiptsPath(fixture), body, " "), 400, "RECEIVING_IDEMPOTENCY_KEY_INVALID");
+        assertError(post(receiptsPath(fixture), body, "invalid key"), 400, "RECEIVING_IDEMPOTENCY_KEY_INVALID");
+        assertError(post(receiptsPath(fixture), body, "a".repeat(129)), 400, "RECEIVING_IDEMPOTENCY_KEY_INVALID");
+        assertEquals(201, post(receiptsPath(fixture), body, "valid-key:1").statusCode());
+    }
+
+    @Test void sameKeyReplaysSameReceiptWithoutChangingProgress() throws Exception {
+        Fixture fixture = fixture(10, 10); String key = "replay-key";
+        HttpResponse<String> first = receiveWithKey(fixture, key, fixture.firstLineId(), 3); assertEquals(201, first.statusCode());
+        UUID receiptId = UUID.fromString(extract(ID_PATTERN, first.body())); java.time.Instant createdAt = receiptRepository.findById(receiptId).orElseThrow().getCreatedAt();
+        HttpResponse<String> replay = receiveWithKey(fixture, key, fixture.firstLineId(), 3); assertEquals(200, replay.statusCode(), replay.body());
+        assertEquals(receiptId, UUID.fromString(extract(ID_PATTERN, replay.body()))); assertEquals(createdAt, receiptRepository.findById(receiptId).orElseThrow().getCreatedAt());
+        assertEquals(receiptsPath(fixture) + "/" + receiptId, replay.headers().firstValue("Location").orElseThrow());
+        assertEquals(1, receiptRepository.count()); assertEquals(1, receiptLineRepository.count());
+        assertTrue(get(shipmentPath(fixture) + "/receiving-progress").body().contains("\"receivedQuantity\":3"));
+        assertEquals(key, receiptRepository.findById(receiptId).orElseThrow().getIdempotencyKey()); assertEquals(64, receiptRepository.findById(receiptId).orElseThrow().getRequestFingerprint().length());
+    }
+
+    @Test void reorderedLinesReplayAndDifferentPayloadConflicts() throws Exception {
+        Fixture fixture = fixture(10, 10); String key = "semantic-key";
+        HttpResponse<String> first = receiveWithKey(fixture, key, fixture.firstLineId(), 3, fixture.secondLineId(), 2); assertEquals(201, first.statusCode());
+        String reordered = receiptBody(fixture.secondLineId(), 2, fixture.firstLineId(), 3);
+        HttpResponse<String> replay = post(receiptsPath(fixture), reordered, key); assertEquals(200, replay.statusCode(), replay.body());
+        assertError(receiveWithKey(fixture, key, fixture.firstLineId(), 4, fixture.secondLineId(), 2), 409, "RECEIVING_IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST");
+        assertEquals(1, receiptRepository.count()); assertEquals(2, receiptLineRepository.count());
+    }
+
+    @Test void sameKeyIsScopedToTenantAndShipmentAndIsCaseSensitive() throws Exception {
+        Fixture first = fixture(10, 10); assertEquals(201, receiveWithKey(first, "Case-Key", first.firstLineId(), 1).statusCode());
+        assertEquals(201, receiveWithKey(first, "case-key", first.firstLineId(), 1).statusCode());
+        InboundShipment otherShipment = shipmentRepository.saveAndFlush(InboundShipment.create(first.tenantId(), first.warehouseId()));
+        UUID otherLine = plannedLineRepository.saveAndFlush(InboundShipmentLine.create(otherShipment.getId(), first.tenantId(), createSku(first.tenantId(), "ABC-099"), 10)).getId();
+        Fixture sameTenantOtherShipment = new Fixture(first.tenantId(), first.warehouseId(), otherShipment.getId(), otherLine, otherLine);
+        assertEquals(201, receiveWithKey(sameTenantOtherShipment, "Case-Key", otherLine, 1).statusCode());
+        Fixture otherTenant = fixture(10, 10); assertEquals(201, receiveWithKey(otherTenant, "Case-Key", otherTenant.firstLineId(), 1).statusCode());
+    }
+
+    @Test void pessimisticShipmentLockReplaysConcurrentSameKeyExactlyOnce() throws Exception {
+        Fixture fixture = fixture(10, 10); String key = "concurrent-key"; CountDownLatch start = new CountDownLatch(1); ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            CompletableFuture<HttpResponse<String>> first = CompletableFuture.supplyAsync(() -> awaitReceiveWithKey(start, fixture, key, 5), executor);
+            CompletableFuture<HttpResponse<String>> second = CompletableFuture.supplyAsync(() -> awaitReceiveWithKey(start, fixture, key, 5), executor);
+            start.countDown(); HttpResponse<String> firstResponse = first.get(30, TimeUnit.SECONDS); HttpResponse<String> secondResponse = second.get(30, TimeUnit.SECONDS);
+            assertTrue(List.of(firstResponse.statusCode(), secondResponse.statusCode()).containsAll(List.of(201, 200)));
+            assertEquals(extract(ID_PATTERN, firstResponse.body()), extract(ID_PATTERN, secondResponse.body())); assertEquals(1, receiptRepository.count()); assertEquals(1, receiptLineRepository.count());
+        } finally { executor.shutdownNow(); }
+    }
+
+    @Test void concurrentSameKeyDifferentPayloadCreatesOnlyOneReceipt() throws Exception {
+        Fixture fixture = fixture(10, 10); String key = "concurrent-mismatch"; CountDownLatch start = new CountDownLatch(1); ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            CompletableFuture<HttpResponse<String>> first = CompletableFuture.supplyAsync(() -> awaitReceiveWithKey(start, fixture, key, 3), executor);
+            CompletableFuture<HttpResponse<String>> second = CompletableFuture.supplyAsync(() -> awaitReceiveWithKey(start, fixture, key, 4), executor);
+            start.countDown(); HttpResponse<String> firstResponse = first.get(30, TimeUnit.SECONDS); HttpResponse<String> secondResponse = second.get(30, TimeUnit.SECONDS);
+            assertTrue(List.of(firstResponse.statusCode(), secondResponse.statusCode()).contains(201));
+            assertTrue(List.of(firstResponse, secondResponse).stream().anyMatch(response -> response.statusCode() == 409 && response.body().contains("RECEIVING_IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_REQUEST")));
+            assertEquals(1, receiptRepository.count()); assertEquals(1, receiptLineRepository.count());
+        } finally { executor.shutdownNow(); }
     }
 
     private HttpResponse<String> awaitReceive(CountDownLatch start, Fixture fixture, long quantity) { try { start.await(30, TimeUnit.SECONDS); return receive(fixture, fixture.firstLineId(), quantity); } catch (Exception exception) { throw new RuntimeException(exception); } }
+    private HttpResponse<String> awaitReceiveWithKey(CountDownLatch start, Fixture fixture, String key, long quantity) { try { start.await(30, TimeUnit.SECONDS); return receiveWithKey(fixture, key, fixture.firstLineId(), quantity); } catch (Exception exception) { throw new RuntimeException(exception); } }
     private Fixture fixture(long firstExpected, long secondExpected) { UUID tenantId = createTenant("receiving-" + UUID.randomUUID().toString().substring(0, 8)); UUID warehouseId = createWarehouse(tenantId, "hcm-01"); UUID firstSku = createSku(tenantId, "ABC-001"); UUID secondSku = createSku(tenantId, "ABC-002"); InboundShipment shipment = shipmentRepository.saveAndFlush(InboundShipment.create(tenantId, warehouseId)); InboundShipmentLine firstLine = plannedLineRepository.saveAndFlush(InboundShipmentLine.create(shipment.getId(), tenantId, firstSku, firstExpected)); InboundShipmentLine secondLine = plannedLineRepository.saveAndFlush(InboundShipmentLine.create(shipment.getId(), tenantId, secondSku, secondExpected)); return new Fixture(tenantId, warehouseId, shipment.getId(), firstLine.getId(), secondLine.getId()); }
     private UUID createTenant(String code) { return tenantRepository.saveAndFlush(Tenant.create(code, code)).getId(); }
     private UUID createWarehouse(UUID tenantId, String code) { return warehouseRepository.saveAndFlush(Warehouse.create(tenantId, code, code)).getId(); }
     private UUID createSku(UUID tenantId, String code) { return skuRepository.saveAndFlush(Sku.create(tenantId, code, code)).getId(); }
-    private HttpResponse<String> receive(Fixture fixture, UUID firstLineId, long firstQuantity) throws Exception { return receive(fixture, firstLineId, firstQuantity, null, null); }
-    private HttpResponse<String> receive(Fixture fixture, UUID firstLineId, long firstQuantity, UUID secondLineId, Integer secondQuantity) throws Exception { String second = secondLineId == null ? "" : ",{\"inboundShipmentLineId\":\"" + secondLineId + "\",\"receivedQuantity\":" + secondQuantity + "}"; return post(receiptsPath(fixture), "{\"lines\":[{\"inboundShipmentLineId\":\"" + firstLineId + "\",\"receivedQuantity\":" + firstQuantity + "}" + second + "]}"); }
+    private HttpResponse<String> receive(Fixture fixture, UUID firstLineId, long firstQuantity) throws Exception { return receiveWithKey(fixture, "key-" + UUID.randomUUID(), firstLineId, firstQuantity); }
+    private HttpResponse<String> receive(Fixture fixture, UUID firstLineId, long firstQuantity, UUID secondLineId, Integer secondQuantity) throws Exception { return receiveWithKey(fixture, "key-" + UUID.randomUUID(), firstLineId, firstQuantity, secondLineId, secondQuantity); }
+    private HttpResponse<String> receiveWithKey(Fixture fixture, String key, UUID firstLineId, long firstQuantity) throws Exception { return receiveWithKey(fixture, key, firstLineId, firstQuantity, null, null); }
+    private HttpResponse<String> receiveWithKey(Fixture fixture, String key, UUID firstLineId, long firstQuantity, UUID secondLineId, Integer secondQuantity) throws Exception { return post(receiptsPath(fixture), receiptBody(firstLineId, firstQuantity, secondLineId, secondQuantity), key); }
+    private String receiptBody(UUID firstLineId, long firstQuantity, UUID secondLineId, Integer secondQuantity) { String second = secondLineId == null ? "" : ",{\"inboundShipmentLineId\":\"" + secondLineId + "\",\"receivedQuantity\":" + secondQuantity + "}"; return "{\"lines\":[{\"inboundShipmentLineId\":\"" + firstLineId + "\",\"receivedQuantity\":" + firstQuantity + "}" + second + "]}"; }
     private String shipmentPath(Fixture fixture) { return "/api/v1/tenants/" + fixture.tenantId() + "/warehouses/" + fixture.warehouseId() + "/inbound-shipments/" + fixture.shipmentId(); }
     private String receiptsPath(Fixture fixture) { return shipmentPath(fixture) + "/receipts"; }
     private HttpResponse<String> post(String path, String body) throws Exception { return HttpClient.newHttpClient().send(HttpRequest.newBuilder().uri(URI.create("http://localhost:" + port + path)).header("Content-Type", "application/json").POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString()); }
+    private HttpResponse<String> post(String path, String body, String idempotencyKey) throws Exception { return HttpClient.newHttpClient().send(HttpRequest.newBuilder().uri(URI.create("http://localhost:" + port + path)).header("Content-Type", "application/json").header("Idempotency-Key", idempotencyKey).POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofString()); }
     private HttpResponse<String> get(String path) throws Exception { return HttpClient.newHttpClient().send(HttpRequest.newBuilder().uri(URI.create("http://localhost:" + port + path)).GET().build(), HttpResponse.BodyHandlers.ofString()); }
     private void insertReceipt(UUID id, UUID tenantId, UUID shipmentId) throws SQLException { execute("INSERT INTO fulfillops.receiving_receipts (id, tenant_id, inbound_shipment_id, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)", id, tenantId, shipmentId); }
     private void insertReceiptLine(UUID id, UUID tenantId, UUID shipmentId, UUID receiptId, UUID lineId, long quantity) throws SQLException { execute("INSERT INTO fulfillops.receiving_receipt_lines (id, tenant_id, inbound_shipment_id, receiving_receipt_id, inbound_shipment_line_id, received_quantity, created_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)", id, tenantId, shipmentId, receiptId, lineId, quantity); }
