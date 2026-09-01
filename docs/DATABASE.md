@@ -28,6 +28,8 @@ Receiving uses append-only `receiving_receipts` and `receiving_receipt_lines`; p
 
 Receiving Receipt POST is retry-safe through persisted Receipt metadata. `receiving_receipts` stores an immutable client idempotency key and SHA-256 semantic request fingerprint, with `UNIQUE (tenant_id, inbound_shipment_id, idempotency_key)`. Receipt posting takes the scoped Shipment lock before resolving the key, so concurrent same-key requests serialize and replay the one committed Receipt. The fingerprint canonicalizes validated, distinct planned-line UUID/quantity pairs without line-order significance. Failed commands do not consume a key because metadata and Receipt history commit atomically. Historical pre-V11 Receipts retain null metadata and are not assigned fabricated client keys. This is Receiving-specific, not a generic platform idempotency facility.
 
+Inventory uses `inventory_balances` as authoritative mutable Warehouse-level current state: one `on_hand_quantity` cell per Tenant, Warehouse, and SKU. It is whole-unit on-hand only, with no Bin, location, available, reserved, or damaged quantity. Composite Tenant/Warehouse and Tenant/SKU foreign keys reject cross-tenant direct writes. Receiving applies positive SKU increments through PostgreSQL atomic UPSERTs, ordered by SKU UUID, in the same transaction as a new Receipt and ReceiptLines. An idempotent replay does not update the balance or timestamps. Receiving progress remains Shipment expected-versus-received history, not Inventory state. FO-014 may add immutable Ledger history while retaining Balance as the current-state projection.
+
 Likely future constraints:
 
 ```text

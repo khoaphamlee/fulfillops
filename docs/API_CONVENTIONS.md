@@ -131,6 +131,7 @@ GET  /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/inbound-shipments/{ship
 POST /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/inbound-shipments/{shipmentId}/receipts
 GET  /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/inbound-shipments/{shipmentId}/receipts/{receiptId}
 GET  /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/inbound-shipments/{shipmentId}/receiving-progress
+GET  /api/v1/tenants/{tenantId}/warehouses/{warehouseId}/inventory/skus/{skuId}
 ```
 
 Location routes keep Tenant and Warehouse explicit, then include only the immediate parent necessary for the resource. Services verify the full ownership chain before use, so a known ID cannot be read or created under another Warehouse or parent path. These routes are structural scoping only; authentication and HTTP authorization remain deferred.
@@ -140,6 +141,8 @@ SKU routes are tenant-scoped but Warehouse-independent. Valid SKU codes are retu
 Inbound shipment creation is atomic and represents expected, discrete whole-unit quantities only. It has no status transition or receiving behavior; creating it does not create Inventory.
 
 Receiving receipt creation is append-only and supports partial whole-unit receipt. It rejects over-receipt through the scoped Shipment lock and cumulative receipt-history check. Receipt POST requires the Receiving-specific Idempotency-Key behavior above; Receiving progress is derived from planned and receipt lines, with no persisted receiving status/counter.
+
+Inventory GET returns Warehouse-level current on-hand quantity for one scoped SKU. If the Tenant, Warehouse, and SKU exist but no balance row exists, it returns `200` with `onHandQuantity: 0` and null `createdAt`/`updatedAt`; GET never creates a balance row. Inventory has no public write endpoint in this phase.
 
 The role PATCH request is `{"role":"ADMIN"}` or `{"role":"VIEWER"}`. It is tenant-scoped but is not authenticated or authorized in FO-007. Unknown role enum JSON uses the existing `MALFORMED_JSON` error and a missing/null role uses `VALIDATION_ERROR`.
 

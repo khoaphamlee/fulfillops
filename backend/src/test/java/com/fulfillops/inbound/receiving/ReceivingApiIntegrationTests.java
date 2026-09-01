@@ -15,6 +15,9 @@ import com.fulfillops.inbound.receiving.infrastructure.ReceivingReceiptLineRepos
 import com.fulfillops.inbound.receiving.infrastructure.ReceivingReceiptRepository;
 import com.fulfillops.inbound.receiving.presentation.CreateReceivingReceiptLineRequest;
 import com.fulfillops.inbound.receiving.presentation.CreateReceivingReceiptRequest;
+import com.fulfillops.inventory.domain.InventoryBalance;
+import com.fulfillops.inventory.infrastructure.InventoryBalanceRepository;
+import com.fulfillops.inventory.application.InventoryService;
 import com.fulfillops.sku.domain.Sku;
 import com.fulfillops.sku.infrastructure.SkuRepository;
 import com.fulfillops.tenant.domain.Tenant;
@@ -43,6 +46,11 @@ import org.postgresql.util.PSQLException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.util.AopTestUtils;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.reset;
 
 class ReceivingApiIntegrationTests extends AbstractPostgresApplicationIntegrationTest {
     private static final Pattern ID_PATTERN = Pattern.compile("\\\"id\\\":\\\"([^\\\"]+)\\\"");
@@ -57,6 +65,8 @@ class ReceivingApiIntegrationTests extends AbstractPostgresApplicationIntegratio
     @Autowired private ReceivingReceiptLineRepository receiptLineRepository;
     @Autowired private ReceivingService receivingService;
     @Autowired private DataSource dataSource;
+    @Autowired private InventoryBalanceRepository inventoryBalanceRepository;
+    @MockitoSpyBean private InventoryService inventoryService;
 
     @Test void partialReceiptsAndDerivedProgressAreCorrect() throws Exception {
         Fixture fixture = fixture(100, 50);
@@ -70,6 +80,8 @@ class ReceivingApiIntegrationTests extends AbstractPostgresApplicationIntegratio
         assertTrue(progress.body().contains("\"inboundShipmentLineId\":\"" + fixture.firstLineId() + "\""));
         assertTrue(progress.body().contains("\"expectedQuantity\":100")); assertTrue(progress.body().contains("\"receivedQuantity\":100")); assertTrue(progress.body().contains("\"remainingQuantity\":0"));
         assertTrue(progress.body().contains("\"expectedQuantity\":50")); assertTrue(progress.body().contains("\"receivedQuantity\":20")); assertTrue(progress.body().contains("\"remainingQuantity\":30"));
+        assertEquals(100, inventoryBalanceRepository.findByTenantIdAndWarehouseIdAndSkuId(fixture.tenantId(), fixture.warehouseId(), skuForLine(fixture.firstLineId())).orElseThrow().getOnHandQuantity());
+        assertEquals(20, inventoryBalanceRepository.findByTenantIdAndWarehouseIdAndSkuId(fixture.tenantId(), fixture.warehouseId(), skuForLine(fixture.secondLineId())).orElseThrow().getOnHandQuantity());
     }
 
     @Test void exactRemainingSucceedsAndOverReceiptAndDuplicateLinesFail() throws Exception {
@@ -113,6 +125,16 @@ class ReceivingApiIntegrationTests extends AbstractPostgresApplicationIntegratio
         assertEquals(201, receiveWithKey(fixture, key, fixture.firstLineId(), 1).statusCode());
     }
 
+    @Test void inventoryFailureRollsBackReceiptLinesAndIdempotencyMetadata() throws Exception {
+        Fixture fixture = fixture(10, 10);
+        InventoryService inventoryTarget = AopTestUtils.getUltimateTargetObject(inventoryService);
+        doThrow(new IllegalStateException("inventory persistence failure")).when(inventoryTarget).recordReceiving(any(), any(), any());
+        assertEquals(500, receiveWithKey(fixture, "inventory-failure", fixture.firstLineId(), 1).statusCode());
+        assertEquals(0, receiptRepository.count()); assertEquals(0, receiptLineRepository.count()); assertEquals(0, inventoryBalanceRepository.count());
+        reset(inventoryTarget);
+        assertEquals(201, receiveWithKey(fixture, "inventory-failure", fixture.firstLineId(), 1).statusCode());
+    }
+
     @Test void pessimisticShipmentLockPreventsConcurrentOverReceipt() throws Exception {
         Fixture fixture = fixture(100, 1); assertEquals(201, receive(fixture, fixture.firstLineId(), 80).statusCode());
         CountDownLatch start = new CountDownLatch(1); ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -149,12 +171,15 @@ class ReceivingApiIntegrationTests extends AbstractPostgresApplicationIntegratio
         Fixture fixture = fixture(10, 10); String key = "replay-key";
         HttpResponse<String> first = receiveWithKey(fixture, key, fixture.firstLineId(), 3); assertEquals(201, first.statusCode());
         UUID receiptId = UUID.fromString(extract(ID_PATTERN, first.body())); java.time.Instant createdAt = receiptRepository.findById(receiptId).orElseThrow().getCreatedAt();
+        java.time.Instant inventoryUpdatedAt = inventoryBalanceRepository.findByTenantIdAndWarehouseIdAndSkuId(fixture.tenantId(), fixture.warehouseId(), skuForLine(fixture.firstLineId())).orElseThrow().getUpdatedAt();
         HttpResponse<String> replay = receiveWithKey(fixture, key, fixture.firstLineId(), 3); assertEquals(200, replay.statusCode(), replay.body());
         assertEquals(receiptId, UUID.fromString(extract(ID_PATTERN, replay.body()))); assertEquals(createdAt, receiptRepository.findById(receiptId).orElseThrow().getCreatedAt());
         assertEquals(receiptsPath(fixture) + "/" + receiptId, replay.headers().firstValue("Location").orElseThrow());
         assertEquals(1, receiptRepository.count()); assertEquals(1, receiptLineRepository.count());
         assertTrue(get(shipmentPath(fixture) + "/receiving-progress").body().contains("\"receivedQuantity\":3"));
         assertEquals(key, receiptRepository.findById(receiptId).orElseThrow().getIdempotencyKey()); assertEquals(64, receiptRepository.findById(receiptId).orElseThrow().getRequestFingerprint().length());
+        assertEquals(3, inventoryBalanceRepository.findByTenantIdAndWarehouseIdAndSkuId(fixture.tenantId(), fixture.warehouseId(), skuForLine(fixture.firstLineId())).orElseThrow().getOnHandQuantity());
+        assertEquals(inventoryUpdatedAt, inventoryBalanceRepository.findByTenantIdAndWarehouseIdAndSkuId(fixture.tenantId(), fixture.warehouseId(), skuForLine(fixture.firstLineId())).orElseThrow().getUpdatedAt());
     }
 
     @Test void reorderedLinesReplayAndDifferentPayloadConflicts() throws Exception {
@@ -205,6 +230,7 @@ class ReceivingApiIntegrationTests extends AbstractPostgresApplicationIntegratio
     private UUID createTenant(String code) { return tenantRepository.saveAndFlush(Tenant.create(code, code)).getId(); }
     private UUID createWarehouse(UUID tenantId, String code) { return warehouseRepository.saveAndFlush(Warehouse.create(tenantId, code, code)).getId(); }
     private UUID createSku(UUID tenantId, String code) { return skuRepository.saveAndFlush(Sku.create(tenantId, code, code)).getId(); }
+    private UUID skuForLine(UUID lineId) { return plannedLineRepository.findById(lineId).orElseThrow().getSkuId(); }
     private HttpResponse<String> receive(Fixture fixture, UUID firstLineId, long firstQuantity) throws Exception { return receiveWithKey(fixture, "key-" + UUID.randomUUID(), firstLineId, firstQuantity); }
     private HttpResponse<String> receive(Fixture fixture, UUID firstLineId, long firstQuantity, UUID secondLineId, Integer secondQuantity) throws Exception { return receiveWithKey(fixture, "key-" + UUID.randomUUID(), firstLineId, firstQuantity, secondLineId, secondQuantity); }
     private HttpResponse<String> receiveWithKey(Fixture fixture, String key, UUID firstLineId, long firstQuantity) throws Exception { return receiveWithKey(fixture, key, firstLineId, firstQuantity, null, null); }

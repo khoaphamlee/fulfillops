@@ -66,7 +66,12 @@ Scope:
 - preserve Receiving concurrency and migration correctness before Inventory.
 
 ### FO-013 — Inventory balance foundation
-Status: TODO
+Status: DONE
+
+Scope:
+- Warehouse-level current on-hand balance per Tenant/Warehouse/SKU,
+- synchronous Receiving-to-Inventory update with PostgreSQL atomic upsert,
+- Inventory read API and cross-Shipment concurrency coverage.
 
 ### FO-014 — Inventory ledger / movements
 Status: TODO

@@ -15,6 +15,8 @@ import com.fulfillops.inbound.receiving.presentation.ReceivingProgressLineRespon
 import com.fulfillops.inbound.receiving.presentation.ReceivingProgressResponse;
 import com.fulfillops.inbound.receiving.presentation.ReceivingReceiptLineResponse;
 import com.fulfillops.inbound.receiving.presentation.ReceivingReceiptResponse;
+import com.fulfillops.inventory.application.InventoryService;
+import com.fulfillops.inventory.application.ReceivedSkuIncrement;
 import com.fulfillops.warehouse.application.WarehouseService;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -38,14 +40,16 @@ public class ReceivingService {
     private final ReceivingReceiptLineRepository receiptLineRepository;
     private final WarehouseService warehouseService;
     private final ReceivingRequestFingerprint requestFingerprint;
+    private final InventoryService inventoryService;
 
-    public ReceivingService(InboundShipmentRepository shipmentRepository, InboundShipmentLineRepository plannedLineRepository, ReceivingReceiptRepository receiptRepository, ReceivingReceiptLineRepository receiptLineRepository, WarehouseService warehouseService, ReceivingRequestFingerprint requestFingerprint) {
+    public ReceivingService(InboundShipmentRepository shipmentRepository, InboundShipmentLineRepository plannedLineRepository, ReceivingReceiptRepository receiptRepository, ReceivingReceiptLineRepository receiptLineRepository, WarehouseService warehouseService, ReceivingRequestFingerprint requestFingerprint, InventoryService inventoryService) {
         this.shipmentRepository = shipmentRepository;
         this.plannedLineRepository = plannedLineRepository;
         this.receiptRepository = receiptRepository;
         this.receiptLineRepository = receiptLineRepository;
         this.warehouseService = warehouseService;
         this.requestFingerprint = requestFingerprint;
+        this.inventoryService = inventoryService;
     }
 
     @Transactional
@@ -82,6 +86,9 @@ public class ReceivingService {
             if (isDuplicateLineViolation(exception)) throw new ReceivingDuplicateLineException();
             throw exception;
         }
+        inventoryService.recordReceiving(tenantId, warehouseId, receiptLines.stream()
+                .map(line -> new ReceivedSkuIncrement(plannedLines.get(line.getInboundShipmentLineId()).getSkuId(), line.getReceivedQuantity()))
+                .toList());
         Map<UUID, Long> cumulativeAfter = cumulativeQuantities(tenantId, shipmentId);
         return new ReceivingReceiptCreationResult(toReceiptResponse(receipt, receiptLines, cumulativeAfter), false);
     }

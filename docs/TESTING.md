@@ -54,6 +54,8 @@ Static containers are shared once per Surefire JVM. If Maven test forks are enab
 
 Receiving idempotency tests use the shared application server to prove persisted same-key replay, mismatch conflicts, Tenant/Shipment key scope, and real concurrent same-key receipt posting. Migration evolution tests use the separate migration server to prove that pre-idempotency Receipt rows migrate with null metadata.
 
+Inventory balance tests use the shared application server to prove that concurrent Receiving against different Shipments can atomically establish and increment the same Warehouse/SKU balance without a lost update.
+
 ## 6. Task report
 
 Report:
