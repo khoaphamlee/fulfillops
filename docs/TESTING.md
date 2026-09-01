@@ -56,6 +56,8 @@ Receiving idempotency tests use the shared application server to prove persisted
 
 Inventory balance tests use the shared application server to prove that concurrent Receiving against different Shipments can atomically establish and increment the same Warehouse/SKU balance without a lost update.
 
+Inventory Ledger tests prove one immutable Receiving movement per ReceiptLine, tenant-aware provenance constraints, and all-or-nothing Receipt/ReceiptLine/Ledger/Balance transactions. The cross-Shipment Balance concurrency scenario also verifies two distinct Ledger movements and reconciled fresh V13 deltas.
+
 ## 6. Task report
 
 Report:

@@ -3,6 +3,8 @@ package com.fulfillops.inventory.application;
 import com.fulfillops.inventory.domain.InventoryBalance;
 import com.fulfillops.inventory.infrastructure.InventoryBalanceJdbcWriter;
 import com.fulfillops.inventory.infrastructure.InventoryBalanceRepository;
+import com.fulfillops.inventory.ledger.domain.InventoryLedgerEntry;
+import com.fulfillops.inventory.ledger.infrastructure.InventoryLedgerEntryRepository;
 import com.fulfillops.sku.application.SkuService;
 import com.fulfillops.warehouse.application.WarehouseService;
 import java.time.Instant;
@@ -19,20 +21,26 @@ import org.springframework.transaction.annotation.Transactional;
 public class InventoryService {
     private final InventoryBalanceRepository balanceRepository;
     private final InventoryBalanceJdbcWriter jdbcWriter;
+    private final InventoryLedgerEntryRepository ledgerRepository;
     private final WarehouseService warehouseService;
     private final SkuService skuService;
 
-    public InventoryService(InventoryBalanceRepository balanceRepository, InventoryBalanceJdbcWriter jdbcWriter, WarehouseService warehouseService, SkuService skuService) {
+    public InventoryService(InventoryBalanceRepository balanceRepository, InventoryBalanceJdbcWriter jdbcWriter, InventoryLedgerEntryRepository ledgerRepository, WarehouseService warehouseService, SkuService skuService) {
         this.balanceRepository = balanceRepository;
         this.jdbcWriter = jdbcWriter;
+        this.ledgerRepository = ledgerRepository;
         this.warehouseService = warehouseService;
         this.skuService = skuService;
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void recordReceiving(UUID tenantId, UUID warehouseId, List<ReceivedSkuIncrement> increments) {
+    public void recordReceiving(UUID tenantId, UUID warehouseId, List<ReceivingInventoryMovement> movements) {
         Instant mutationTime = Instant.now();
-        Map<UUID, Long> quantities = increments.stream().collect(Collectors.groupingBy(ReceivedSkuIncrement::skuId, Collectors.summingLong(ReceivedSkuIncrement::receivedQuantity)));
+        ledgerRepository.saveAll(movements.stream()
+                .map(movement -> InventoryLedgerEntry.receiving(tenantId, warehouseId, movement.skuId(), movement.receivingReceiptLineId(), movement.receivedQuantity(), mutationTime))
+                .toList());
+        ledgerRepository.flush();
+        Map<UUID, Long> quantities = movements.stream().collect(Collectors.groupingBy(ReceivingInventoryMovement::skuId, Collectors.summingLong(ReceivingInventoryMovement::receivedQuantity)));
         quantities.entrySet().stream().sorted(Map.Entry.comparingByKey(Comparator.comparing(UUID::toString)))
                 .map(entry -> new ReceivedSkuIncrement(entry.getKey(), entry.getValue()))
                 .forEach(increment -> jdbcWriter.upsert(tenantId, warehouseId, increment, mutationTime));

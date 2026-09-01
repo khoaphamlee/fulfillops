@@ -74,7 +74,7 @@ Scope:
 - Inventory read API and cross-Shipment concurrency coverage.
 
 ### FO-014 — Inventory ledger / movements
-Status: TODO
+Status: IN REVIEW
 
 ### FO-015 — Putaway task
 Status: TODO

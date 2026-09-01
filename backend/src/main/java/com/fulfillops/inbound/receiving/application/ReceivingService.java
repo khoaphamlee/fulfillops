@@ -16,7 +16,7 @@ import com.fulfillops.inbound.receiving.presentation.ReceivingProgressResponse;
 import com.fulfillops.inbound.receiving.presentation.ReceivingReceiptLineResponse;
 import com.fulfillops.inbound.receiving.presentation.ReceivingReceiptResponse;
 import com.fulfillops.inventory.application.InventoryService;
-import com.fulfillops.inventory.application.ReceivedSkuIncrement;
+import com.fulfillops.inventory.application.ReceivingInventoryMovement;
 import com.fulfillops.warehouse.application.WarehouseService;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -87,7 +87,7 @@ public class ReceivingService {
             throw exception;
         }
         inventoryService.recordReceiving(tenantId, warehouseId, receiptLines.stream()
-                .map(line -> new ReceivedSkuIncrement(plannedLines.get(line.getInboundShipmentLineId()).getSkuId(), line.getReceivedQuantity()))
+                .map(line -> new ReceivingInventoryMovement(line.getId(), plannedLines.get(line.getInboundShipmentLineId()).getSkuId(), line.getReceivedQuantity()))
                 .toList());
         Map<UUID, Long> cumulativeAfter = cumulativeQuantities(tenantId, shipmentId);
         return new ReceivingReceiptCreationResult(toReceiptResponse(receipt, receiptLines, cumulativeAfter), false);
